@@ -265,34 +265,45 @@ def main():
         print("=" * 50)
         return
     
-    # Bot uygulamasını oluştur
-    app = Application.builder().token(TOKEN).build()
-    
-    # Komut handler'larını ekle
-    app.add_handler(CommandHandler("start", start_command))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("language", language_command))
-    app.add_handler(CommandHandler("info", info_command))
-    app.add_handler(CommandHandler("lang", language_command))
-    
-    # Callback query handler ekle (buton tıklamaları)
-    app.add_handler(CallbackQueryHandler(button_handler))
-    
-    # Mesaj handler ekle
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    # Hata handler ekle
-    app.add_error_handler(error_handler)
-    
-    # Botu başlat
-    logger.info("🤖 Bot başlatılıyor...")
-    print("=" * 50)
-    print("🤖 MultiLanguage Bot Başlatılıyor...")
-    print(f"📊 Kayıtlı kullanıcı sayısı: {len(db.users)}")
-    print(f"🌍 Desteklenen diller: Türkçe, İngilizce, Arapça, Kürtçe (Sorani/Badini)")
-    print("=" * 50)
-    
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    try:
+        # Bot uygulamasını oluştur - DÜZELTİLDİ
+        app = Application.builder().token(TOKEN).build()
+        
+        # Komut handler'larını ekle
+        app.add_handler(CommandHandler("start", start_command))
+        app.add_handler(CommandHandler("help", help_command))
+        app.add_handler(CommandHandler("language", language_command))
+        app.add_handler(CommandHandler("info", info_command))
+        app.add_handler(CommandHandler("lang", language_command))
+        
+        # Callback query handler ekle (buton tıklamaları)
+        app.add_handler(CallbackQueryHandler(button_handler))
+        
+        # Mesaj handler ekle
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        
+        # Hata handler ekle
+        app.add_error_handler(error_handler)
+        
+        # Botu başlat
+        logger.info("🤖 Bot başlatılıyor...")
+        print("=" * 50)
+        print("🤖 MultiLanguage Bot Başlatılıyor...")
+        print(f"📊 Kayıtlı kullanıcı sayısı: {len(db.users)}")
+        print(f"🌍 Desteklenen diller: Türkçe, İngilizce, Arapça, Kürtçe (Sorani/Badini)")
+        print(f"🔑 Token: {TOKEN[:10]}...{TOKEN[-10:] if len(TOKEN) > 20 else ''}")
+        print("=" * 50)
+        
+        # Polling'i başlat
+        app.run_polling()
+        
+    except Exception as e:
+        logger.error(f"Bot başlatılırken hata: {e}")
+        print(f"❌ Bot başlatılırken hata: {type(e).__name__}: {e}")
+        print("\n⚠️  Olası sorunlar:")
+        print("1. Token yanlış olabilir")
+        print("2. python-telegram-bot sürümü uyumsuz")
+        print("3. Railway'da internet bağlantısı sorunu")
 
 if __name__ == "__main__":
     main()
