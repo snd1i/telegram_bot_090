@@ -1,7 +1,7 @@
 import os
 import logging
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Updater, CommandHandler, CallbackContext
 
 # Log ayarları
 logging.basicConfig(level=logging.INFO)
@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 TOKEN = os.getenv("TOKEN", "")
 
 # /start komutu
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("✅ Bot çalışıyor! /start komutu çalıştı.")
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("✅ TEST: Bot çalışıyor! /start komutu başarılı.")
 
 # Ana fonksiyon
 def main():
@@ -22,20 +22,26 @@ def main():
         print("Railway'da TOKEN değişkenini ekleyin")
         return
     
-    # Bot uygulamasını oluştur
-    app = Application.builder().token(TOKEN).build()
+    # Bot updater'ı oluştur (13.15 sürümü için)
+    updater = Updater(TOKEN, use_context=True)
+    
+    # Dispatcher'ı al
+    dp = updater.dispatcher
     
     # Sadece /start komutu ekleyelim
-    app.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("start", start))
     
     # Botu başlat
-    print("🤖 TEST BOTU BAŞLATILIYOR...")
+    print("🤖 TEST BOTU BAŞLATILIYOR (Python 3.11)...")
     print(f"Token: {TOKEN[:10]}...")
+    print("python-telegram-bot sürümü: 13.15")
     
     try:
-        app.run_polling()
+        updater.start_polling()
+        print("✅ Bot başarıyla başlatıldı!")
+        updater.idle()
     except Exception as e:
-        print(f"❌ Hata: {e}")
+        print(f"❌ Hata: {type(e).__name__}: {e}")
 
 if __name__ == "__main__":
     main()
