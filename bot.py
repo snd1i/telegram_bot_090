@@ -1,94 +1,100 @@
 #!/usr/bin/env python3
 """
-BASİT TELEGRAM BOT TEST
+TELEGRAM BOT - ÇALIŞAN VERSİYON
+Sürüm: python-telegram-bot 13.15
 """
 
 import os
-import time
+import logging
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Updater, CommandHandler, CallbackContext
 
-print("=" * 50)
-print("🤖 BOT TEST SÜRÜM 1.0")
-print("=" * 50)
+# Log ayarı
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
-# Token kontrolü
+print("=" * 60)
+print("🤖 BOT BAŞLIYOR - SÜRÜM 13.15")
+print("=" * 60)
+
+# Token kontrol
 TOKEN = os.getenv("BOT_TOKEN")
 
 if not TOKEN:
-    print("❌ HATA: BOT_TOKEN bulunamadı!")
-    print("Railway'da Variables'a ekleyin:")
-    print("1. Railway projene git")
-    print("2. Variables sekmesi")
-    print("3. New Variable: BOT_TOKEN")
-    print("4. Value: BotFather token'in")
-    time.sleep(10)
+    print("❌ HATA: BOT_TOKEN YOK!")
+    print("Lütfen Railway Variables'a BOT_TOKEN ekleyin")
+    print("1. Railway projen → Variables")
+    print("2. New Variable: BOT_TOKEN")
+    print("3. Value: BotFather token'in")
     exit()
 
-print(f"✅ Token alındı")
-print("⏳ 3 saniye bekle...")
-time.sleep(3)
+print(f"✅ Token alındı: {TOKEN[:15]}...")
 
-# /start komutu
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Komutlar
+def start(update: Update, context: CallbackContext):
     user = update.effective_user
-    print(f"✅ /start komutu: {user.first_name}")
+    print(f"✅ /start: {user.first_name} ({user.id})")
     
-    await update.message.reply_text(
-        f"🎉 SELAM {user.first_name}!\n\n"
-        f"✅ Bot ÇALIŞIYOR!\n"
-        f"👤 Senin ID: {user.id}\n\n"
-        f"Bir sorun yok, her şey yolunda! 🚀"
+    update.message.reply_text(
+        f"🎉 MERHABA {user.first_name}!\n\n"
+        f"✅ BOT ÇALIŞIYOR!\n"
+        f"👤 ID: {user.id}\n\n"
+        f"🚀 Her şey yolunda!"
     )
 
-# /help komutu
-async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "ℹ️ YARDIM\n\n"
+def help(update: Update, context: CallbackContext):
+    update.message.reply_text(
+        "📖 YARDIM\n\n"
         "/start - Botu başlat\n"
-        "/help - Bu mesajı göster\n"
-        "/ping - Bot aktif mi?\n\n"
-        "🎯 Test başarılı!"
+        "/help - Yardım\n"
+        "/test - Test komutu\n\n"
+        "🤖 Bot aktif!"
     )
 
-# /ping komutu
-async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🏓 PONG! Bot aktif! ✅")
+def test(update: Update, context: CallbackContext):
+    update.message.reply_text("✅ TEST BAŞARILI! Bot çalışıyor.")
 
-# Ana program
+# Ana fonksiyon
 def main():
     print("🚀 Bot başlatılıyor...")
     
     try:
-        # Bot uygulaması
-        app = Application.builder().token(TOKEN).build()
+        # Updater oluştur (eski sürüm formatı)
+        updater = Updater(TOKEN, use_context=True)
+        
+        # Dispatcher al
+        dp = updater.dispatcher
         
         # Komutları ekle
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("help", help_cmd))
-        app.add_handler(CommandHandler("ping", ping))
+        dp.add_handler(CommandHandler("start", start))
+        dp.add_handler(CommandHandler("help", help))
+        dp.add_handler(CommandHandler("test", test))
         
         print("""
-✅ BOT HAZIR!
+✅ BOT KURULDU!
         
-📱 TELEGRAM'DA TEST ET:
-1. Botunu aç
+📱 TELEGRAM TESTİ:
+1. Botu aç
 2. /start yaz
 3. Mesaj gelmeli
         
-🎯 Eğer çalışırsa sırayla diğer özellikleri ekleriz.
+🎯 Başarılı olursa diğer özellikleri ekleriz.
         """)
         
-        # Botu başlat
-        app.run_polling(
-            drop_pending_updates=True,
-            timeout=30
-        )
+        # Polling başlat
+        updater.start_polling()
+        
+        # Botu çalışır tut
+        updater.idle()
         
     except Exception as e:
-        print(f"❌ Hata oluştu: {e}")
-        print("⏳ 10 saniye sonra kapanıyor...")
-        time.sleep(10)
+        print(f"❌ Hata: {e}")
+        print("⏳ 5 saniye sonra kapanıyor...")
+        import time
+        time.sleep(5)
 
 if __name__ == "__main__":
     main()
