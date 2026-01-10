@@ -1,114 +1,105 @@
 #!/usr/bin/env python3
 """
-TELEGRAM BOT - MODERN SÜRÜM
-python-telegram-bot 20.7
+TELEGRAM BOT - PYTHON 3.13 UYUMLU
 """
 
 import os
 import sys
-import logging
+import asyncio
 
 print("=" * 60)
-print("🤖 BOT BAŞLIYOR - SÜRÜM 20.7")
+print("🤖 BOT BAŞLIYOR - PYTHON 3.13")
 print("=" * 60)
 
-# Önce token kontrolü
+# Token kontrol
 TOKEN = os.getenv("BOT_TOKEN")
-print(f"Token durumu: {'✅ VAR' if TOKEN else '❌ YOK'}")
 
 if not TOKEN:
-    print("""
-❌ HATA: BOT_TOKEN YOK!
-
-Railway'da ekle:
-1. Projene git
-2. Variables sekmesi
-3. New Variable
-4. Name: BOT_TOKEN
-5. Value: BotFather token'in
-    """)
+    print("❌ HATA: BOT_TOKEN YOK!")
+    print("Railway Variables'a ekleyin:")
+    print("Name: BOT_TOKEN")
+    print("Value: BotFather token'in")
     sys.exit(1)
 
 print(f"✅ Token: {TOKEN[:15]}...")
 
-# Gerekli kütüphaneleri import et
-try:
-    from telegram import Update
-    from telegram.ext import Application, CommandHandler, ContextTypes
-    print("✅ Kütüphaneler yüklendi")
-except ImportError as e:
-    print(f"❌ Import hatası: {e}")
-    print("requirements.txt kontrol et: python-telegram-bot==20.7")
-    sys.exit(1)
-
-# Log ayarı
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-
-# Komutlar
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/start komutu"""
-    user = update.effective_user
-    print(f"📞 /start: {user.first_name}")
-    
-    await update.message.reply_text(
-        f"🎉 MERHABA {user.first_name}!\n\n"
-        f"✅ BOT ÇALIŞIYOR! 🚀\n"
-        f"👤 Senin ID: {user.id}\n\n"
-        f"🏆 Başarılı!"
-    )
-
-async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/help komutu"""
-    await update.message.reply_text(
-        "📖 YARDIM\n\n"
-        "/start - Botu başlat\n"
-        "/help - Yardım\n"
-        "/ping - Bot aktif mi?\n\n"
-        "🤖 Her şey yolunda!"
-    )
-
-async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/ping komutu"""
-    await update.message.reply_text("🏓 PONG! Bot aktif ✅")
-
-# Ana fonksiyon
-def main():
-    print("🚀 Bot kuruluyor...")
-    
+# Async fonksiyonlar
+async def main_async():
     try:
-        # Application oluştur
-        application = Application.builder().token(TOKEN).build()
+        # Kütüphaneleri import et
+        from telegram import Update
+        from telegram.ext import Application, CommandHandler, ContextTypes
         
-        # Komutları ekle
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(CommandHandler("help", help_cmd))
-        application.add_handler(CommandHandler("ping", ping))
+        print("✅ Kütüphaneler yüklendi")
+        
+        # Application oluştur
+        app = Application.builder().token(TOKEN).build()
+        
+        # Komutlar
+        async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            user = update.effective_user
+            print(f"✅ /start: {user.first_name}")
+            
+            await update.message.reply_text(
+                f"🎉 SELAM {user.first_name}!\n\n"
+                f"✅ BOT ÇALIŞIYOR! 🚀\n"
+                f"👤 ID: {user.id}\n\n"
+                f"Her şey mükemmel! 🏆"
+            )
+        
+        async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            await update.message.reply_text(
+                "📖 YARDIM\n\n"
+                "/start - Başla\n"
+                "/help - Yardım\n"
+                "/test - Test\n\n"
+                "🤖 Aktif!"
+            )
+        
+        async def test(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            await update.message.reply_text("✅ TEST BAŞARILI!")
+        
+        # Handler'ları ekle
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("help", help_cmd))
+        app.add_handler(CommandHandler("test", test))
         
         print("""
-✅ BOT HAZIR!
+✅ BOT KURULDU!
 
 📱 TELEGRAM TESTİ:
 1. Botu aç
 2. /start yaz
-3. "MERHABA" mesajı gelmeli
+3. Mesaj gelmeli
 
-🎯 Başarılı!
+🎯 Başarılı olursa kanal zorunluluğunu ekleriz.
         """)
         
         # Botu başlat
-        application.run_polling(
-            drop_pending_updates=True,
-            timeout=30,
-            pool_timeout=30
-        )
+        await app.initialize()
+        await app.start()
+        await app.updater.start_polling()
         
+        # Sonsuz döngü
+        await asyncio.Event().wait()
+        
+    except ImportError as e:
+        print(f"❌ Import hatası: {e}")
+        print("requirements.txt kontrol et")
     except Exception as e:
         print(f"❌ Hata: {e}")
         import traceback
         traceback.print_exc()
+
+# Ana fonksiyon
+def main():
+    try:
+        # Async main'i çalıştır
+        asyncio.run(main_async())
+    except KeyboardInterrupt:
+        print("\n🛑 Bot durduruldu")
+    except Exception as e:
+        print(f"❌ Kritik hata: {e}")
 
 if __name__ == "__main__":
     main()
