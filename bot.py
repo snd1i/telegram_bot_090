@@ -1,100 +1,114 @@
 #!/usr/bin/env python3
 """
-TELEGRAM BOT - ÇALIŞAN VERSİYON
-Sürüm: python-telegram-bot 13.15
+TELEGRAM BOT - MODERN SÜRÜM
+python-telegram-bot 20.7
 """
 
 import os
+import sys
 import logging
-from telegram import Update
-from telegram.ext import Updater, CommandHandler, CallbackContext
+
+print("=" * 60)
+print("🤖 BOT BAŞLIYOR - SÜRÜM 20.7")
+print("=" * 60)
+
+# Önce token kontrolü
+TOKEN = os.getenv("BOT_TOKEN")
+print(f"Token durumu: {'✅ VAR' if TOKEN else '❌ YOK'}")
+
+if not TOKEN:
+    print("""
+❌ HATA: BOT_TOKEN YOK!
+
+Railway'da ekle:
+1. Projene git
+2. Variables sekmesi
+3. New Variable
+4. Name: BOT_TOKEN
+5. Value: BotFather token'in
+    """)
+    sys.exit(1)
+
+print(f"✅ Token: {TOKEN[:15]}...")
+
+# Gerekli kütüphaneleri import et
+try:
+    from telegram import Update
+    from telegram.ext import Application, CommandHandler, ContextTypes
+    print("✅ Kütüphaneler yüklendi")
+except ImportError as e:
+    print(f"❌ Import hatası: {e}")
+    print("requirements.txt kontrol et: python-telegram-bot==20.7")
+    sys.exit(1)
 
 # Log ayarı
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
-logger = logging.getLogger(__name__)
-
-print("=" * 60)
-print("🤖 BOT BAŞLIYOR - SÜRÜM 13.15")
-print("=" * 60)
-
-# Token kontrol
-TOKEN = os.getenv("BOT_TOKEN")
-
-if not TOKEN:
-    print("❌ HATA: BOT_TOKEN YOK!")
-    print("Lütfen Railway Variables'a BOT_TOKEN ekleyin")
-    print("1. Railway projen → Variables")
-    print("2. New Variable: BOT_TOKEN")
-    print("3. Value: BotFather token'in")
-    exit()
-
-print(f"✅ Token alındı: {TOKEN[:15]}...")
 
 # Komutlar
-def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/start komutu"""
     user = update.effective_user
-    print(f"✅ /start: {user.first_name} ({user.id})")
+    print(f"📞 /start: {user.first_name}")
     
-    update.message.reply_text(
+    await update.message.reply_text(
         f"🎉 MERHABA {user.first_name}!\n\n"
-        f"✅ BOT ÇALIŞIYOR!\n"
-        f"👤 ID: {user.id}\n\n"
-        f"🚀 Her şey yolunda!"
+        f"✅ BOT ÇALIŞIYOR! 🚀\n"
+        f"👤 Senin ID: {user.id}\n\n"
+        f"🏆 Başarılı!"
     )
 
-def help(update: Update, context: CallbackContext):
-    update.message.reply_text(
+async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/help komutu"""
+    await update.message.reply_text(
         "📖 YARDIM\n\n"
         "/start - Botu başlat\n"
         "/help - Yardım\n"
-        "/test - Test komutu\n\n"
-        "🤖 Bot aktif!"
+        "/ping - Bot aktif mi?\n\n"
+        "🤖 Her şey yolunda!"
     )
 
-def test(update: Update, context: CallbackContext):
-    update.message.reply_text("✅ TEST BAŞARILI! Bot çalışıyor.")
+async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/ping komutu"""
+    await update.message.reply_text("🏓 PONG! Bot aktif ✅")
 
 # Ana fonksiyon
 def main():
-    print("🚀 Bot başlatılıyor...")
+    print("🚀 Bot kuruluyor...")
     
     try:
-        # Updater oluştur (eski sürüm formatı)
-        updater = Updater(TOKEN, use_context=True)
-        
-        # Dispatcher al
-        dp = updater.dispatcher
+        # Application oluştur
+        application = Application.builder().token(TOKEN).build()
         
         # Komutları ekle
-        dp.add_handler(CommandHandler("start", start))
-        dp.add_handler(CommandHandler("help", help))
-        dp.add_handler(CommandHandler("test", test))
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("help", help_cmd))
+        application.add_handler(CommandHandler("ping", ping))
         
         print("""
-✅ BOT KURULDU!
-        
+✅ BOT HAZIR!
+
 📱 TELEGRAM TESTİ:
 1. Botu aç
 2. /start yaz
-3. Mesaj gelmeli
-        
-🎯 Başarılı olursa diğer özellikleri ekleriz.
+3. "MERHABA" mesajı gelmeli
+
+🎯 Başarılı!
         """)
         
-        # Polling başlat
-        updater.start_polling()
-        
-        # Botu çalışır tut
-        updater.idle()
+        # Botu başlat
+        application.run_polling(
+            drop_pending_updates=True,
+            timeout=30,
+            pool_timeout=30
+        )
         
     except Exception as e:
         print(f"❌ Hata: {e}")
-        print("⏳ 5 saniye sonra kapanıyor...")
-        import time
-        time.sleep(5)
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()
