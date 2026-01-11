@@ -1,8 +1,10 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from telegram.constants import ChatMemberStatus
+from aiohttp import web
 import json
 import os
+import asyncio
 
 # Bot token'ınızı Railway environment variable'dan alın
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
@@ -11,7 +13,68 @@ BOT_TOKEN = os.environ.get('BOT_TOKEN')
 USER_DATA_FILE = 'user_data.json'
 CONFIG_FILE = 'config.json'
 
-# Mesajlar ve butonlar için dil seçenekleri
+# ========== HEALTH CHECK SERVER ==========
+async def health_check(request):
+    """Health check endpoint for Railway"""
+    return web.Response(text="OK")
+
+async def start_health_server():
+    """Start health check server on port 8080"""
+    app = web.Application()
+    app.router.add_get('/health', health_check)
+    app.router.add_get('/', health_check)
+    
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', 8080)
+    await site.start()
+    print("✅ Health check server started on port 8080")
+
+# ========== DOSYA İŞLEMLERİ ==========
+def load_user_data():
+    """Kullanıcı verilerini yükle"""
+    try:
+        with open(USER_DATA_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+def save_user_data(data):
+    """Kullanıcı verilerini kaydet"""
+    with open(USER_DATA_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+def load_config():
+    """Config dosyasını yükle"""
+    try:
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+            config_data = json.load(f)
+            if config_data.get('admin_id') != "5541236874":
+                config_data['admin_id'] = "5541236874"
+                save_config(config_data)
+            return config_data
+    except (FileNotFoundError, json.JSONDecodeError):
+        default_config = {
+            "admin_id": "5541236874",
+            "channel_username": "",
+            "channel_invite_link": "",
+            "required_channel": False,
+            "channel_id": None
+        }
+        save_config(default_config)
+        return default_config
+
+def save_config(config):
+    """Config dosyasını kaydet"""
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
+
+def is_admin(user_id):
+    """Kullanıcının admin olup olmadığını kontrol et"""
+    config = load_config()
+    return str(user_id) == config.get('admin_id', "5541236874")
+
+# ========== MESAJLAR ==========
 LANGUAGES = {
     'ku': {
         'name': 'Kürtçe Sorani 🇹🇯',
@@ -63,72 +126,22 @@ LANGUAGES = {
     }
 }
 
-# ========== DOSYA İŞLEMLERİ ==========
-def load_user_data():
-    """Kullanıcı verilerini yükle"""
-    try:
-        with open(USER_DATA_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
-
-def save_user_data(data):
-    """Kullanıcı verilerini kaydet"""
-    with open(USER_DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-def load_config():
-    """Config dosyasını yükle"""
-    try:
-        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-            config_data = json.load(f)
-            # Admin ID kontrolü - sizin ID'niz her zaman admin olsun
-            if config_data.get('admin_id') != "5541236874":
-                config_data['admin_id'] = "5541236874"
-                save_config(config_data)
-            return config_data
-    except (FileNotFoundError, json.JSONDecodeError):
-        # Varsayılan config - sizin ID'nizle başlat
-        default_config = {
-            "admin_id": "5541236874",
-            "channel_username": "",
-            "channel_invite_link": "",
-            "required_channel": False,
-            "channel_id": None
-        }
-        save_config(default_config)
-        return default_config
-
-def save_config(config):
-    """Config dosyasını kaydet"""
-    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-        json.dump(config, f, ensure_ascii=False, indent=2)
-
-def is_admin(user_id):
-    """Kullanıcının admin olup olmadığını kontrol et"""
-    config = load_config()
-    return str(user_id) == config.get('admin_id', "5541236874")
-
 # ========== KANAL KONTROLÜ ==========
 async def check_channel_membership(user_id: int, context: ContextTypes.DEFAULT_TYPE):
     """Kullanıcının kanala üye olup olmadığını kontrol et"""
     config = load_config()
     
-    # Eğer kanal zorunlu değilse veya kanal ayarlanmamışsa true dön
     if not config.get('required_channel', False) or not config.get('channel_username'):
         return True
     
-    # Admin için kanal kontrolünü atla
     if is_admin(user_id):
         return True
     
     try:
         channel_username = config['channel_username']
-        # @ işaretini temizle
         if channel_username.startswith('@'):
             channel_username = channel_username[1:]
         
-        # Kanal ID'sini kullanarak kontrol et (daha güvenilir)
         chat_id = config.get('channel_id')
         if chat_id:
             try:
@@ -137,19 +150,16 @@ async def check_channel_membership(user_id: int, context: ContextTypes.DEFAULT_T
                     user_id=user_id
                 )
             except:
-                # ID ile olmazsa username ile dene
                 chat_member = await context.bot.get_chat_member(
                     chat_id=f"@{channel_username}",
                     user_id=user_id
                 )
         else:
-            # Username ile kontrol et
             chat_member = await context.bot.get_chat_member(
                 chat_id=f"@{channel_username}",
                 user_id=user_id
             )
         
-        # Kullanıcının durumunu kontrol et
         if chat_member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, 
                                  ChatMemberStatus.OWNER, ChatMemberStatus.CREATOR]:
             return True
@@ -157,8 +167,7 @@ async def check_channel_membership(user_id: int, context: ContextTypes.DEFAULT_T
             return False
             
     except Exception as e:
-        print(f"Kanal kontrol hatası: {e}")
-        # Hata durumunda kullanıcıya izin VERME - güvenlik için
+        print(f"Channel check error: {e}")
         return False
 
 async def show_subscription_required(update: Update, context: ContextTypes.DEFAULT_TYPE, user_lang='en'):
@@ -167,7 +176,8 @@ async def show_subscription_required(update: Update, context: ContextTypes.DEFAU
     lang_data = LANGUAGES.get(user_lang, LANGUAGES['en'])
     
     if not config.get('channel_invite_link'):
-        await update.message.reply_text("❌ Channel invite link is not set! Admin must set it first.")
+        if update.message:
+            await update.message.reply_text("❌ Channel invite link is not set! Admin must set it first.")
         return
     
     keyboard = [
@@ -193,26 +203,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     user_data = load_user_data()
     
-    # Kanal kontrolü - HER ZAMAN kontrol et
     config = load_config()
     if config.get('required_channel', False) and config.get('channel_username'):
         is_member = await check_channel_membership(update.effective_user.id, context)
-        print(f"User {user_id} membership check: {is_member}")
         
         if not is_member:
-            # Kullanıcının dilini bul
             user_lang = user_data.get(user_id, {}).get('lang', 'en')
             await show_subscription_required(update, context, user_lang)
             return
-        else:
-            print(f"User {user_id} is a member, allowing access")
     
-    # Kullanıcıyı kontrol et
     if user_id not in user_data or 'lang' not in user_data[user_id]:
-        # Dil seçimi göster
         await show_language_selection(update, context)
     else:
-        # Hoşgeldin mesajı göster
         await show_welcome_message(update, context, user_data[user_id]['lang'])
 
 async def show_language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -264,7 +266,6 @@ async def join_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/join komutu - Admin paneli"""
     user_id = str(update.effective_user.id)
     
-    # Admin kontrolü
     if not is_admin(user_id):
         user_data = load_user_data()
         user_lang = user_data.get(user_id, {}).get('lang', 'en')
@@ -274,7 +275,6 @@ async def join_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     config = load_config()
     
-    # Eğer argüman yoksa mevcut ayarları göster
     if not context.args:
         current_settings = (
             "🛠️ **Admin Panel - Required Channel Settings**\n\n"
@@ -284,13 +284,12 @@ async def join_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🔗 **Invite Link:** {config.get('channel_invite_link', 'Not set')}\n"
             f"📌 **Required?:** {'✅ YES' if config.get('required_channel') else '❌ NO'}\n\n"
             "**Commands:**\n"
-            "/join @channelname - Set channel (e.g., @example_channel)\n"
+            "/join @channelname - Set channel\n"
             "/join link https://t.me/... - Set invite link\n"
             "/join on - Enable required subscription\n"
             "/join off - Disable required subscription\n"
             "/join status - Show current status\n"
-            "/join test - Test channel membership\n"
-            "/join getid - Get channel ID"
+            "/join test - Test channel membership"
         )
         await update.message.reply_text(current_settings)
         return
@@ -301,7 +300,6 @@ async def join_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not config.get('channel_username'):
             await update.message.reply_text("❌ First set a channel with /join @channelname")
             return
-            
         config['required_channel'] = True
         save_config(config)
         await update.message.reply_text("✅ Required channel subscription ENABLED!")
@@ -312,20 +310,13 @@ async def join_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ Required channel subscription DISABLED!")
         
     elif command == "status":
-        channel_info = config.get('channel_username', 'Not set')
-        if channel_info:
-            test_result = "🟢 Should work"
-        else:
-            test_result = "🔴 Not configured"
-            
         status_text = (
             f"📊 **Status Report**\n\n"
             f"Admin: {config.get('admin_id')}\n"
-            f"Channel: {channel_info}\n"
+            f"Channel: {config.get('channel_username', 'Not set')}\n"
             f"Channel ID: {config.get('channel_id', 'Not set')}\n"
-            f"Required Subscription: {'✅ ENABLED' if config.get('required_channel') else '❌ DISABLED'}\n"
-            f"Invite Link: {config.get('channel_invite_link', 'Not set')}\n"
-            f"Test Result: {test_result}"
+            f"Required: {'✅ ENABLED' if config.get('required_channel') else '❌ DISABLED'}\n"
+            f"Invite Link: {config.get('channel_invite_link', 'Not set')}"
         )
         await update.message.reply_text(status_text)
         
@@ -333,115 +324,40 @@ async def join_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not config.get('channel_username'):
             await update.message.reply_text("❌ No channel set!")
             return
-            
-        try:
-            # Botun kanala erişimini test et
-            channel_username = config['channel_username']
-            if channel_username.startswith('@'):
-                channel_username = channel_username[1:]
-            
-            chat = await context.bot.get_chat(chat_id=f"@{channel_username}")
-            config['channel_id'] = chat.id
-            save_config(config)
-            
-            # Kendi üyeliğini kontrol et
-            chat_member = await context.bot.get_chat_member(
-                chat_id=chat.id,
-                user_id=update.effective_user.id
-            )
-            
-            member_status = "Member ✅" if chat_member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER] else "Not Member ❌"
-            
-            await update.message.reply_text(
-                f"✅ Channel accessible!\n"
-                f"Title: {chat.title}\n"
-                f"Username: @{chat.username}\n"
-                f"ID: {chat.id}\n"
-                f"Your status: {member_status}"
-            )
-        except Exception as e:
-            await update.message.reply_text(f"❌ Error accessing channel: {str(e)}")
-    
-    elif command == "getid":
-        if not config.get('channel_username'):
-            await update.message.reply_text("❌ No channel set!")
-            return
-            
         try:
             channel_username = config['channel_username']
             if channel_username.startswith('@'):
                 channel_username = channel_username[1:]
-            
             chat = await context.bot.get_chat(chat_id=f"@{channel_username}")
             config['channel_id'] = chat.id
             save_config(config)
-            await update.message.reply_text(f"✅ Channel ID saved: {chat.id}")
+            await update.message.reply_text(f"✅ Channel accessible!\nTitle: {chat.title}\nID: {chat.id}")
         except Exception as e:
-            await update.message.reply_text(f"❌ Error getting channel ID: {str(e)}")
+            await update.message.reply_text(f"❌ Error: {str(e)}")
         
     elif command == "link" and len(context.args) > 1:
         link = context.args[1]
         if not link.startswith('https://t.me/'):
-            await update.message.reply_text("❌ Invalid link! Link must start with https://t.me/")
+            await update.message.reply_text("❌ Invalid link! Must start with https://t.me/")
             return
         config['channel_invite_link'] = link
         save_config(config)
         await update.message.reply_text(f"✅ Invite link updated: {link}")
         
     elif command.startswith('@'):
-        # Kanal kullanıcı adı
-        channel_username = command
-        
         try:
-            # Kanalı kontrol et
-            chat = await context.bot.get_chat(chat_id=channel_username)
-            config['channel_username'] = channel_username
+            chat = await context.bot.get_chat(chat_id=command)
+            config['channel_username'] = command
             config['channel_id'] = chat.id
-            
-            # Varsayılan davet linki oluştur
             if not config.get('channel_invite_link'):
-                channel_name = channel_username[1:]  # @ işaretini kaldır
+                channel_name = command[1:]
                 config['channel_invite_link'] = f"https://t.me/{channel_name}"
-            
             save_config(config)
             await update.message.reply_text(
-                f"✅ Channel set successfully!\n"
-                f"📢 Name: {chat.title}\n"
-                f"👤 Username: {channel_username}\n"
-                f"🆔 ID: {chat.id}\n"
-                f"📎 Invite link: {config['channel_invite_link']}"
+                f"✅ Channel set!\nName: {chat.title}\nID: {chat.id}\nLink: {config['channel_invite_link']}"
             )
         except Exception as e:
-            await update.message.reply_text(f"❌ Error setting channel: {str(e)}\nMake sure the bot is in the channel!")
-        
-    elif 't.me/' in command:
-        # t.me/kanaladi formatı
-        if 't.me/' in command:
-            channel_name = command.split('t.me/')[-1]
-            channel_username = f"@{channel_name}"
-        else:
-            channel_username = f"@{command}"
-        
-        try:
-            # Kanalı kontrol et
-            chat = await context.bot.get_chat(chat_id=channel_username)
-            config['channel_username'] = channel_username
-            config['channel_id'] = chat.id
-            
-            # Varsayılan davet linki oluştur
-            if not config.get('channel_invite_link'):
-                config['channel_invite_link'] = f"https://t.me/{channel_name}"
-            
-            save_config(config)
-            await update.message.reply_text(
-                f"✅ Channel set successfully!\n"
-                f"📢 Name: {chat.title}\n"
-                f"👤 Username: {channel_username}\n"
-                f"🆔 ID: {chat.id}\n"
-                f"📎 Invite link: {config['channel_invite_link']}"
-            )
-        except Exception as e:
-            await update.message.reply_text(f"❌ Error setting channel: {str(e)}\nMake sure the bot is in the channel!")
+            await update.message.reply_text(f"❌ Error: {str(e)}")
         
     else:
         await update.message.reply_text("❌ Invalid command! Type /join for help.")
@@ -456,23 +372,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data = load_user_data()
     config = load_config()
     
-    # Abonelik kontrol butonu
     if query.data == 'check_subscription':
         user_lang = user_data.get(user_id, {}).get('lang', 'en')
         lang_data = LANGUAGES.get(user_lang, LANGUAGES['en'])
         
-        # Kontrol mesajı göster
         await query.edit_message_text(text=lang_data['checking'])
         
-        # Kanal kontrolü
         if config.get('required_channel', False):
             is_member = await check_channel_membership(query.from_user.id, context)
-            print(f"Check subscription for {user_id}: {is_member}")
             
             if is_member:
                 await query.edit_message_text(text=lang_data['already_subscribed'])
-                
-                # Kullanıcı verisini kontrol et
                 if user_id not in user_data or 'lang' not in user_data[user_id]:
                     await show_language_selection(update, context)
                 else:
@@ -481,7 +391,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await show_subscription_required(update, context, user_lang)
         return
     
-    # Diğer butonlar için önce kanal kontrolü
     if config.get('required_channel', False) and config.get('channel_username'):
         is_member = await check_channel_membership(query.from_user.id, context)
         if not is_member:
@@ -490,42 +399,36 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
     
     if query.data.startswith('lang_'):
-        # Dil seçimi
         lang_code = query.data.split('_')[1]
-        
-        # Kullanıcı verisini kaydet
         if user_id not in user_data:
             user_data[user_id] = {}
         user_data[user_id]['lang'] = lang_code
         save_user_data(user_data)
-        
-        # Seçilen dilin mesajını göster
         lang_data = LANGUAGES.get(lang_code, LANGUAGES['en'])
         await query.edit_message_text(text=lang_data['lang_selected'])
-        
-        # Hoşgeldin mesajını göster
         await show_welcome_message(update, context, lang_code)
         
     elif query.data == 'change_lang':
-        # Dil değiştirme
         await show_language_selection(update, context)
         
     elif query.data == 'help':
-        # Yardım butonu
         user_lang = user_data.get(user_id, {}).get('lang', 'en')
         lang_data = LANGUAGES.get(user_lang, LANGUAGES['en'])
         await query.message.reply_text(lang_data['help_text'])
 
 # ========== BOT BAŞLATMA ==========
-def main():
+async def main():
     """Botu başlat"""
-    # Token kontrolü
     if not BOT_TOKEN:
-        print("❌ Error: Please set BOT_TOKEN environment variable!")
+        print("❌ Error: BOT_TOKEN environment variable not set!")
         print("Go to Railway → Variables → Add BOT_TOKEN")
         return
     
-    # Config dosyasını yükle
+    # Health check server'ı başlat
+    await start_health_server()
+    print("✅ Health server started")
+    
+    # Config yükle
     config = load_config()
     
     # Bot uygulamasını oluştur
@@ -540,11 +443,18 @@ def main():
     print("🤖 Bot starting...")
     print(f"👑 Admin ID: {config.get('admin_id')}")
     print(f"📢 Channel: {config.get('channel_username', 'Not set')}")
-    print(f"🆔 Channel ID: {config.get('channel_id', 'Not set')}")
-    print(f"🔒 Required Subscription: {config.get('required_channel', False)}")
-    print(f"🔑 Bot Token: {'✓ Set' if BOT_TOKEN else '✗ Missing'}")
     
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Polling'i başlat
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling()
+    
+    print("✅ Bot started successfully!")
+    
+    # Sonsuz döngüde kal
+    while True:
+        await asyncio.sleep(3600)  # Her saat uyan
 
 if __name__ == '__main__':
-    main()
+    import asyncio
+    asyncio.run(main())
