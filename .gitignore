@@ -1,1 +1,9 @@
-users.json
+.env
+*.pyc
+__pycache__/
+venv/
+bot_database.db
+banned_users.json
+*.log
+secrets.txt
+config.json
