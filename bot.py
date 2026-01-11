@@ -368,16 +368,33 @@ async def join_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ========== BUTON İŞLEMLERİ ==========
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Buton tıklamalarını işle"""
+    """Tüm buton tıklamalarını işle"""
     query = update.callback_query
     await query.answer()
     
     user_id = str(query.from_user.id)
     user_data = load_user_data()
     
-    # BUTON TÜRÜNE GÖRE İŞLEM
+    print(f"🔘 Button clicked: {query.data}")  # Debug için
+    
+    # 1. ÖNCE ADMIN BUTONLARINI KONTROL ET
+    if query.data.startswith('admin_') or query.data.startswith('broadcast_'):
+        try:
+            # admin.py'deki fonksiyonu çağır
+            from extensions.admin import admin_button_callback as admin_callback
+            await admin_callback(update, context)
+            return  # Burada işlem tamam, diğer kontrollere gitme
+        except Exception as e:
+            print(f"❌ Admin button error: {e}")
+            # Hata durumunda kullanıcıya mesaj göster
+            try:
+                await query.message.reply_text(f"⚠️ Admin panel error, please try again.")
+            except:
+                pass
+            return
+    
+    # 2. DİL BUTONLARI (lang_ku, lang_en, lang_ar)
     if query.data.startswith('lang_'):
-        # DİL SEÇİMİ BUTONU
         # Önce erişim kontrolü
         has_access = await check_user_access(update, context)
         if not has_access:
@@ -398,9 +415,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Hoşgeldin mesajını göster
         await show_welcome_message(update, context, lang_code)
-        
+        return
+    
+    # 3. DİL DEĞİŞTİRME BUTONU
     elif query.data == 'change_lang':
-        # DİL DEĞİŞTİRME BUTONU
         # Önce erişim kontrolü
         has_access = await check_user_access(update, context)
         if not has_access:
@@ -408,9 +426,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Dil değiştirme
         await show_language_selection(update, context)
-        
+        return
+    
+    # 4. YARDIM BUTONU
     elif query.data == 'help':
-        # YARDIM BUTONU
         # Önce erişim kontrolü
         has_access = await check_user_access(update, context)
         if not has_access:
@@ -420,6 +439,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_lang = user_data.get(user_id, {}).get('lang', 'en')
         lang_data = LANGUAGES.get(user_lang, LANGUAGES['en'])
         await query.message.reply_text(lang_data['help_text'])
+        return
+    
+    # 5. TANIMLANMAMIŞ BUTON
+    else:
+        print(f"⚠️ Unknown button: {query.data}")
+        await query.message.reply_text("⚠️ This button is not functional yet.")
 
 # ========== EKLENTİ YÜKLEYİCİ ==========
 def load_extensions(application):
@@ -490,6 +515,8 @@ def main():
     # ANA komut işleyicileri
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('join', join_command))
+    
+    # BUTON İŞLEYİCİLERİ
     application.add_handler(CallbackQueryHandler(button_callback, pattern=None))
     
     # EKLENTİLERİ YÜKLE
