@@ -505,7 +505,7 @@ async def back_to_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_welcome_menu(user_id, context.bot, user_lang)
 
 # ============================
-# DUYURU SİSTEMİ (DÜZELTİLMİŞ)
+# DUYURU SİSTEMİ
 # ============================
 
 # 18) ADMIN KOMUTLARI
@@ -531,7 +531,7 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# 19) HIZLI BUTON SİSTEMİ - YENİ EKLENDİ
+# 19) HIZLI BUTON SİSTEMİ - GÜNCELLENDİ
 async def quick_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -539,16 +539,17 @@ async def quick_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(
         "⚡ **Hızlı Buton Oluşturma**\n\n"
         "**Format:**\n"
-        "`Buton Adı = https://link.com`\n\n"
+        "`Buton Adı https://link.com`\n\n"
         "**Örnek:**\n"
-        "`Prompt Aç = https://t.me/PrompttAI_bot`\n\n"
+        "`Prompt Aç https://t.me/PrompttAI_bot`\n"
+        "`Kanalımız https://t.me/+wet-9MZuj044ZGQy`\n\n"
         "Şimdi buton bilgilerini yazın:",
         parse_mode=ParseMode.MARKDOWN
     )
     
     context.user_data['waiting_for_quick_button'] = True
 
-# 20) HIZLI BUTON MESAJI ALMA
+# 20) HIZLI BUTON MESAJI ALMA - GÜNCELLENDİ
 async def receive_quick_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
@@ -557,18 +558,23 @@ async def receive_quick_button(update: Update, context: ContextTypes.DEFAULT_TYP
     if not context.user_data.get('waiting_for_quick_button'):
         return
     
-    message = update.message.text
+    message = update.message.text.strip()
     
-    # "Buton Adı = https://link.com" formatını parse et
-    if "=" in message:
+    # Boşluklara göre ayır
+    parts = message.split()
+    
+    if len(parts) >= 2:
         try:
-            parts = message.split("=", 1)
-            button_name = parts[0].strip()
-            button_url = parts[1].strip()
+            # Son kısım URL olmalı
+            button_url = parts[-1]
             
             # URL kontrolü
             if not button_url.startswith(("http://", "https://")):
+                # Eğer http/https yoksa ekle
                 button_url = "https://" + button_url
+            
+            # Buton adı: URL hariç geri kalan her şey
+            button_name = " ".join(parts[:-1])
             
             # Onay mesajı
             keyboard = [
@@ -590,9 +596,9 @@ async def receive_quick_button(update: Update, context: ContextTypes.DEFAULT_TYP
             )
             
         except Exception as e:
-            await update.message.reply_text(f"❌ Hata: {e}\n\nLütfen formatı doğru yazın: `Buton Adı = https://link.com`")
+            await update.message.reply_text(f"❌ Hata: {e}\n\nLütfen formatı doğru yazın: `Buton Adı https://link.com`")
     else:
-        await update.message.reply_text("❌ Yanlış format! Lütfen `Buton Adı = https://link.com` şeklinde yazın.")
+        await update.message.reply_text("❌ Yanlış format! Lütfen `Buton Adı https://link.com` şeklinde yazın.\n\nÖrnek: `Prompt Aç https://t.me/PrompttAI_bot`")
 
 # 21) HIZLI BUTON GÖNDERME
 async def send_quick_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
