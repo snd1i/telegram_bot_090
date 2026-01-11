@@ -1,177 +1,193 @@
+import os
 import logging
 import sqlite3
-import os
-from datetime import date
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from telegram.constants import ParseMode
-import asyncio
 
-# Basit logging
+# Logging ayarı
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Token
+# Token kontrolü
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN ayarlanmamış!")
+    logger.error("BOT_TOKEN bulunamadı! Railway Variables'dan ayarlayın.")
+    raise SystemExit(1)
 
-# Ayarlar
+# Admin ID
 ADMIN_ID = 5541236874
+
+# Linkler
 CHANNEL_LINK = "https://t.me/+wet-9MZuj044ZGQy"
 PROMPT_LINK = "https://t.me/PrompttAI_bot/Prompts"
 
 # Database
-DB_NAME = "bot_database.db"
+DB_FILE = "bot_data.db"
 
-def init_db():
+def init_database():
+    """Veritabanını başlat"""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    # Kullanıcılar tablosu
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            language TEXT DEFAULT 'en',
+            registered_date TEXT,
+            last_active TEXT
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+    logger.info("Veritabanı hazır")
+
+init_database()
+
+def get_user_language(user_id):
+    """Kullanıcının dilini getir"""
     try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute('''CREATE TABLE IF NOT EXISTS users
-                    (user_id INTEGER PRIMARY KEY, 
-                     lang TEXT DEFAULT 'en',
-                     joined_date DATE DEFAULT CURRENT_DATE,
-                     banned INTEGER DEFAULT 0)''')
-        conn.commit()
-        conn.close()
-        logger.info("Database hazır")
-    except Exception as e:
-        logger.error(f"Database hatası: {e}")
-
-init_db()
-
-# Dil sistemi
-LANGUAGES = {
-    'tr': '🇹🇷 Türkçe',
-    'en': '🇬🇧 English', 
-    'ku': '🇹🇯 کوردی',
-    'ar': '🇸🇦 العربية'
-}
-
-def get_user_lang(user_id):
-    try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute("SELECT lang FROM users WHERE user_id=?", (user_id,))
-        result = c.fetchone()
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT language FROM users WHERE user_id = ?", (user_id,))
+        result = cursor.fetchone()
         conn.close()
         return result[0] if result else 'en'
     except:
         return 'en'
 
-def save_user(user_id, lang):
+def save_user(user_id, language='en'):
+    """Kullanıcıyı kaydet"""
     try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        today = date.today().isoformat()
-        c.execute("INSERT OR REPLACE INTO users (user_id, lang, joined_date) VALUES (?, ?, ?)", 
-                  (user_id, lang, today))
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+        
+        cursor.execute('''
+            INSERT OR REPLACE INTO users (user_id, language, registered_date, last_active)
+            VALUES (?, ?, ?, ?)
+        ''', (user_id, language, now, now))
+        
         conn.commit()
         conn.close()
     except Exception as e:
         logger.error(f"Kullanıcı kaydetme hatası: {e}")
 
+# Diller
+LANGUAGES = {
+    'tr': '🇹🇷 Türkçe',
+    'en': '🇬🇧 English',
+    'ku': '🇹🇯 کوردی',
+    'ar': '🇸🇦 العربية'
+}
+
 # /start komutu
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Botu başlat"""
     user = update.effective_user
-    logger.info(f"Yeni kullanıcı: {user.id}")
     
     # Dil seçim butonları
-    keyboard = [
+    buttons = [
         [InlineKeyboardButton("🇹🇷 Türkçe", callback_data="lang_tr")],
         [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
         [InlineKeyboardButton("🇹🇯 کوردی", callback_data="lang_ku")],
         [InlineKeyboardButton("🇸🇦 العربية", callback_data="lang_ar")]
     ]
     
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    keyboard = InlineKeyboardMarkup(buttons)
     
     await update.message.reply_text(
-        "🌍 **Lütfen dilinizi seçin / Please choose your language:**",
-        reply_markup=reply_markup
+        "🌍 **Lütfen dilinizi seçin / Please select your language:**",
+        reply_markup=keyboard
     )
 
 # Dil seçimi
-async def select_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def language_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Dil seçimini işle"""
     query = update.callback_query
     await query.answer()
     
-    lang_code = query.data.split('_')[1]
+    language = query.data.replace("lang_", "")
     user_id = query.from_user.id
     
     # Kullanıcıyı kaydet
-    save_user(user_id, lang_code)
+    save_user(user_id, language)
     
     # Hoşgeldin mesajı
-    welcome_texts = {
-        'tr': "🤖 **Hoş geldin!**\n\nAşağıdaki butonları kullanabilirsin:",
+    welcome_messages = {
+        'tr': "🤖 **Hoş geldiniz!**\n\nAşağıdaki butonları kullanabilirsiniz:",
         'en': "🤖 **Welcome!**\n\nYou can use the buttons below:",
         'ku': "🤖 **بەخێربێیت!**\n\nدەتوانیت ئەم دوگمانەی خوارەوە بەکاربهێنیت:",
         'ar': "🤖 **أهلاً بك!**\n\nيمكنك استخدام الأزرار أدناه:"
     }
     
+    # Buton metinleri
     button_texts = {
         'tr': {
-            'prompt': '🚀 Prompt Alma',
+            'prompts': '🚀 Prompt Alma',
             'channel': '📢 Kanalımız',
             'help': '❓ Yardım',
             'lang': '🌐 Dil Değiştir'
         },
         'en': {
-            'prompt': '🚀 Get Prompts',
+            'prompts': '🚀 Get Prompts',
             'channel': '📢 Our Channel',
             'help': '❓ Help',
             'lang': '🌐 Change Language'
         },
         'ku': {
-            'prompt': '🚀 پرۆمپت وەرگرن',
+            'prompts': '🚀 پرۆمپت وەرگرن',
             'channel': '📢 کەناڵەکەمان',
             'help': '❓ یارمەتی',
             'lang': '🌐 زمان بگۆڕە'
         },
         'ar': {
-            'prompt': '🚀 احصل على المحفزات',
+            'prompts': '🚀 احصل على المحفزات',
             'channel': '📢 قناتنا',
             'help': '❓ مساعدة',
             'lang': '🌐 تغيير اللغة'
         }
     }
     
-    texts = button_texts.get(lang_code, button_texts['en'])
+    texts = button_texts.get(language, button_texts['en'])
     
-    keyboard = [
+    # Butonlar
+    buttons = [
         [
-            InlineKeyboardButton(texts['prompt'], url=PROMPT_LINK),
+            InlineKeyboardButton(texts['prompts'], url=PROMPT_LINK),
             InlineKeyboardButton(texts['channel'], url=CHANNEL_LINK)
         ],
         [
-            InlineKeyboardButton(texts['help'], callback_data="help_menu"),
+            InlineKeyboardButton(texts['help'], callback_data="help"),
             InlineKeyboardButton(texts['lang'], callback_data="change_lang")
         ]
     ]
     
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    keyboard = InlineKeyboardMarkup(buttons)
     
     await query.edit_message_text(
-        welcome_texts.get(lang_code, welcome_texts['en']),
-        reply_markup=reply_markup,
+        welcome_messages.get(language, welcome_messages['en']),
+        reply_markup=keyboard,
         parse_mode=ParseMode.MARKDOWN
     )
 
 # Ana menü
-async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Ana menüye dön"""
     query = update.callback_query
     await query.answer()
     
     user_id = query.from_user.id
-    user_lang = get_user_lang(user_id)
+    language = get_user_language(user_id)
     
-    welcome_texts = {
-        'tr': "🤖 **Ana Menü**\n\nAşağıdaki butonları kullanabilirsin:",
+    welcome_messages = {
+        'tr': "🤖 **Ana Menü**\n\nAşağıdaki butonları kullanabilirsiniz:",
         'en': "🤖 **Main Menu**\n\nYou can use the buttons below:",
         'ku': "🤖 **مێنیوی سەرەکی**\n\nدەتوانیت ئەم دوگمانەی خوارەوە بەکاربهێنیت:",
         'ar': "🤖 **القائمة الرئيسية**\n\nيمكنك استخدام الأزرار أدناه:"
@@ -179,151 +195,167 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     button_texts = {
         'tr': {
-            'prompt': '🚀 Prompt Alma',
+            'prompts': '🚀 Prompt Alma',
             'channel': '📢 Kanalımız',
             'help': '❓ Yardım',
             'lang': '🌐 Dil Değiştir'
         },
         'en': {
-            'prompt': '🚀 Get Prompts',
+            'prompts': '🚀 Get Prompts',
             'channel': '📢 Our Channel',
             'help': '❓ Help',
             'lang': '🌐 Change Language'
         },
         'ku': {
-            'prompt': '🚀 پرۆمپت وەرگرن',
+            'prompts': '🚀 پرۆمپت وەرگرن',
             'channel': '📢 کەناڵەکەمان',
             'help': '❓ یارمەتی',
             'lang': '🌐 زمان بگۆڕە'
         },
         'ar': {
-            'prompt': '🚀 احصل على المحفزات',
+            'prompts': '🚀 احصل على المحفزات',
             'channel': '📢 قناتنا',
             'help': '❓ مساعدة',
             'lang': '🌐 تغيير اللغة'
         }
     }
     
-    texts = button_texts.get(user_lang, button_texts['en'])
+    texts = button_texts.get(language, button_texts['en'])
     
-    keyboard = [
+    buttons = [
         [
-            InlineKeyboardButton(texts['prompt'], url=PROMPT_LINK),
+            InlineKeyboardButton(texts['prompts'], url=PROMPT_LINK),
             InlineKeyboardButton(texts['channel'], url=CHANNEL_LINK)
         ],
         [
-            InlineKeyboardButton(texts['help'], callback_data="help_menu"),
+            InlineKeyboardButton(texts['help'], callback_data="help"),
             InlineKeyboardButton(texts['lang'], callback_data="change_lang")
         ]
     ]
     
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    keyboard = InlineKeyboardMarkup(buttons)
     
     await query.edit_message_text(
-        welcome_texts.get(user_lang, welcome_texts['en']),
-        reply_markup=reply_markup,
+        welcome_messages.get(language, welcome_messages['en']),
+        reply_markup=keyboard,
         parse_mode=ParseMode.MARKDOWN
     )
 
 # Yardım
-async def help_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Yardım mesajı"""
     if update.callback_query:
         query = update.callback_query
         await query.answer()
         user_id = query.from_user.id
-        is_callback = True
+        edit_message = True
     else:
         user_id = update.effective_user.id
-        is_callback = False
+        edit_message = False
     
-    user_lang = get_user_lang(user_id)
+    language = get_user_language(user_id)
     
     help_texts = {
         'tr': """🤖 **Bot Kullanımı**
 
 **Komutlar:**
 /start - Botu başlat
-/leng - Dil değiştir
-/app - Prompt linki
-/help - Yardım
+/language - Dil değiştir
+/prompts - Prompt linki
+/help - Bu mesajı göster
 
-**Admin Komutları:**
-/admin - Admin paneli""",
+**Butonlar:**
+• Prompt Alma - Promptları görüntüle
+• Kanalımız - Resmi kanalımıza katıl
+• Yardım - Yardım mesajı
+• Dil Değiştir - Dil tercihinizi değiştirin""",
         
         'en': """🤖 **Bot Usage**
 
 **Commands:**
-/start - Start bot
-/leng - Change language
-/app - Prompt link
-/help - Help
+/start - Start the bot
+/language - Change language
+/prompts - Get prompt links
+/help - Show this message
 
-**Admin Commands:**
-/admin - Admin panel""",
+**Buttons:**
+• Get Prompts - View prompts
+• Our Channel - Join our official channel
+• Help - Help message
+• Change Language - Change your language preference""",
         
         'ku': """🤖 **بەکارهێنانی بۆت**
 
 **فەرمانەکان:**
-/start - بۆت دەستپێبکە
-/leng - زمان بگۆڕە
-/app - لینکی پرۆمپت
-/help - یارمەتی
+/start - بۆتەکە دەستپێبکە
+/language - زمان بگۆڕە
+/prompts - لینکی پرۆمپتەکان
+/help - ئەم پەیامە پیشان بدە
 
-**فەرمانەکانی ئەدمین:**
-/admin - پانێلی ئەدمین""",
+**دوگمەکان:**
+• پرۆمپت وەرگرن - پرۆمپتەکان ببینە
+• کەناڵەکەمان - بچۆ بۆ کەناڵە فەرمییەکەمان
+• یارمەتی - پەیامی یارمەتی
+• زمان بگۆڕە - هەڵبژاردنی زمان بگۆڕە""",
         
         'ar': """🤖 **استخدام البوت**
 
 **الأوامر:**
 /start - بدء البوت
-/leng - تغيير اللغة
-/app - رابط المحفزات
-/help - مساعدة
+/language - تغيير اللغة
+/prompts - روابط المحفزات
+/help - عرض هذه الرسالة
 
-**أوامر المسؤول:**
-/admin - لوحة المسؤول"""
+**الأزرار:**
+• احصل على المحفزات - عرض المحفزات
+• قناتنا - انضم إلى قناتنا الرسمية
+• مساعدة - رسالة المساعدة
+• تغيير اللغة - تغيير تفضيل اللغة"""
     }
     
-    keyboard = [[InlineKeyboardButton("◀️ Geri", callback_data="main_menu")]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    buttons = [[InlineKeyboardButton("◀️ Geri", callback_data="main_menu")]]
+    keyboard = InlineKeyboardMarkup(buttons)
     
-    text = help_texts.get(user_lang, help_texts['en'])
+    text = help_texts.get(language, help_texts['en'])
     
-    if is_callback:
-        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode=ParseMode.MARKDOWN)
+    if edit_message:
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
     else:
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=text,
-            reply_markup=reply_markup,
-            parse_mode=ParseMode.MARKDOWN
-        )
+        await update.message.reply_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
 
 # Dil değiştirme
-async def change_language_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+async def change_language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Dil değiştirme menüsü"""
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        edit_message = True
+    else:
+        edit_message = False
     
-    keyboard = [
+    buttons = [
         [InlineKeyboardButton("🇹🇷 Türkçe", callback_data="lang_tr")],
         [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
         [InlineKeyboardButton("🇹🇯 کوردی", callback_data="lang_ku")],
         [InlineKeyboardButton("🇸🇦 العربية", callback_data="lang_ar")]
     ]
     
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    keyboard = InlineKeyboardMarkup(buttons)
     
-    await query.edit_message_text(
-        "🌍 **Yeni dil seçin / Choose new language:**",
-        reply_markup=reply_markup
-    )
+    text = "🌍 **Yeni dilinizi seçin / Select your new language:**"
+    
+    if edit_message:
+        await query.edit_message_text(text, reply_markup=keyboard)
+    else:
+        await update.message.reply_text(text, reply_markup=keyboard)
 
-# /app komutu
-async def app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# /prompts komutu
+async def prompts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Prompt linki göster"""
     user = update.effective_user
-    user_lang = get_user_lang(user.id)
+    language = get_user_language(user.id)
     
-    texts = {
+    messages = {
         'tr': "🚀 **Prompt almak için butona tıklayın:**",
         'en': "🚀 **Click the button to get prompts:**",
         'ku': "🚀 **کرتە لە دوگمەکە بکە بۆ وەرگرتنی پرۆمپت:**",
@@ -332,255 +364,280 @@ async def app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     button_texts = {
         'tr': "🔥 Prompt Alma",
-        'en': "🔥 Get Prompts", 
+        'en': "🔥 Get Prompts",
         'ku': "🔥 پرۆمپت وەربگرن",
         'ar': "🔥 احصل على المحفزات"
     }
     
-    keyboard = [[
-        InlineKeyboardButton(
-            button_texts.get(user_lang, button_texts['en']),
-            url=PROMPT_LINK
-        )
-    ]]
+    button = InlineKeyboardButton(
+        button_texts.get(language, button_texts['en']),
+        url=PROMPT_LINK
+    )
     
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    keyboard = InlineKeyboardMarkup([[button]])
+    
     await update.message.reply_text(
-        texts.get(user_lang, texts['en']),
-        reply_markup=reply_markup,
+        messages.get(language, messages['en']),
+        reply_markup=keyboard,
         parse_mode=ParseMode.MARKDOWN
     )
 
-# /leng komutu
-async def leng_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    
-    keyboard = [
-        [InlineKeyboardButton("🇹🇷 Türkçe", callback_data="lang_tr")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
-        [InlineKeyboardButton("🇹🇯 کوردی", callback_data="lang_ku")],
-        [InlineKeyboardButton("🇸🇦 العربية", callback_data="lang_ar")]
-    ]
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.message.reply_text(
-        "🌍 **Yeni dil seçin / Choose new language:**",
-        reply_markup=reply_markup
-    )
+# /language komutu
+async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Dil değiştirme komutu"""
+    await change_language_command(update, context)
 
 # /admin komutu
-async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin paneli"""
     user = update.effective_user
     if user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Yetkiniz yok!")
+        await update.message.reply_text("🚫 Bu komut sadece adminler içindir.")
         return
     
-    keyboard = [
+    buttons = [
         [InlineKeyboardButton("📢 Duyuru Gönder", callback_data="admin_broadcast")],
-        [InlineKeyboardButton("⚡ Hızlı Buton", callback_data="admin_quickbtn")],
+        [InlineKeyboardButton("⚡ Hızlı Buton", callback_data="admin_quick_button")],
         [InlineKeyboardButton("📊 İstatistikler", callback_data="admin_stats")]
     ]
     
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    keyboard = InlineKeyboardMarkup(buttons)
+    
     await update.message.reply_text(
-        "👑 **Admin Paneli**",
-        reply_markup=reply_markup
+        "👑 **Admin Paneli**\n\nAşağıdaki seçeneklerden birini seçin:",
+        reply_markup=keyboard,
+        parse_mode=ParseMode.MARKDOWN
     )
 
 # İstatistikler
-async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """İstatistikleri göster"""
     query = update.callback_query
     await query.answer()
     
     try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
         
-        c.execute("SELECT COUNT(*) FROM users")
-        total = c.fetchone()[0]
+        # Toplam kullanıcı
+        cursor.execute("SELECT COUNT(*) FROM users")
+        total_users = cursor.fetchone()[0]
         
-        c.execute("SELECT COUNT(*) FROM users WHERE banned=1")
-        banned = c.fetchone()[0]
-        
-        c.execute("SELECT lang, COUNT(*) FROM users GROUP BY lang")
-        langs = c.fetchall()
+        # Dil dağılımı
+        cursor.execute("SELECT language, COUNT(*) FROM users GROUP BY language")
+        language_stats = cursor.fetchall()
         
         conn.close()
         
-        stats = f"📊 **İstatistikler**\n\n"
-        stats += f"• Toplam Kullanıcı: {total}\n"
-        stats += f"• Banlı Kullanıcı: {banned}\n\n"
-        stats += "**Diller:**\n"
+        stats_text = "📊 **Bot İstatistikleri**\n\n"
+        stats_text += f"• Toplam Kullanıcı: {total_users}\n\n"
+        stats_text += "**Dil Dağılımı:**\n"
         
-        for lang, count in langs:
+        for lang, count in language_stats:
             lang_name = LANGUAGES.get(lang, lang)
-            stats += f"  {lang_name}: {count}\n"
+            stats_text += f"  {lang_name}: {count}\n"
         
-        keyboard = [[InlineKeyboardButton("◀️ Geri", callback_data="admin_back")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        buttons = [[InlineKeyboardButton("◀️ Geri", callback_data="admin_back")]]
+        keyboard = InlineKeyboardMarkup(buttons)
         
-        await query.edit_message_text(stats, reply_markup=reply_markup, parse_mode=ParseMode.MARKDOWN)
+        await query.edit_message_text(
+            stats_text,
+            reply_markup=keyboard,
+            parse_mode=ParseMode.MARKDOWN
+        )
         
     except Exception as e:
-        logger.error(f"Stats error: {e}")
-        await query.edit_message_text("❌ Hata!")
+        logger.error(f"İstatistik hatası: {e}")
+        await query.edit_message_text("❌ İstatistikler alınamadı.")
 
 # Hızlı buton
-async def admin_quickbtn(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_quick_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Hızlı buton oluştur"""
     query = update.callback_query
     await query.answer()
     
     await query.edit_message_text(
-        "⚡ **Hızlı Buton Oluştur**\n\n"
-        "Buton adı ve linkini gönderin:\n"
-        "Örnek: `Promtlar https://t.me/link`"
+        "⚡ **Hızlı Buton Oluşturma**\n\n"
+        "Buton adı ve linkini şu şekilde gönderin:\n"
+        "`Buton Adı https://ornek.link`\n\n"
+        "Örnek:\n"
+        "`Promtlar https://t.me/PrompttAI_bot`"
     )
     
-    context.user_data['quick_button'] = True
+    context.user_data['waiting_for_button'] = True
 
 # Broadcast
-async def admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_broadcast_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Broadcast mesajı oluştur"""
     query = update.callback_query
     await query.answer()
     
     await query.edit_message_text(
-        "📢 **Duyuru Gönder**\n\n"
-        "Duyuru metnini gönderin:"
+        "📢 **Duyuru Oluşturma**\n\n"
+        "Duyuru metnini gönderin. Bu mesaj tüm kullanıcılara iletilecektir.\n\n"
+        "İptal etmek için: /cancel"
     )
     
-    context.user_data['broadcast'] = True
+    context.user_data['waiting_for_broadcast'] = True
 
-# Admin mesajları
-async def handle_admin_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Admin geri dönüş
+async def admin_back_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin paneline geri dön"""
+    query = update.callback_query
+    await query.answer()
+    
+    buttons = [
+        [InlineKeyboardButton("📢 Duyuru Gönder", callback_data="admin_broadcast")],
+        [InlineKeyboardButton("⚡ Hızlı Buton", callback_data="admin_quick_button")],
+        [InlineKeyboardButton("📊 İstatistikler", callback_data="admin_stats")]
+    ]
+    
+    keyboard = InlineKeyboardMarkup(buttons)
+    
+    await query.edit_message_text(
+        "👑 **Admin Paneli**\n\nAşağıdaki seçeneklerden birini seçin:",
+        reply_markup=keyboard,
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+# Admin mesaj işleme
+async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin mesajlarını işle"""
     user = update.effective_user
     if user.id != ADMIN_ID:
         return
     
-    # Hızlı buton
-    if context.user_data.get('quick_button'):
-        text = update.message.text
+    # Hızlı buton mesajı
+    if context.user_data.get('waiting_for_button'):
+        message_text = update.message.text
         
-        if 'http' in text:
-            # Basit parsing
-            parts = text.split('http')
+        # Basit parsing
+        if 'http' in message_text:
+            parts = message_text.split('http')
             if len(parts) >= 2:
-                btn_name = parts[0].strip()
-                btn_url = 'http' + parts[1].strip()
+                button_name = parts[0].strip()
+                button_url = 'http' + parts[1].strip()
                 
-                # Buton gönder
-                keyboard = [[InlineKeyboardButton(btn_name, url=btn_url)]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
+                # Tüm kullanıcılara gönder
                 try:
-                    conn = sqlite3.connect(DB_NAME)
-                    c = conn.cursor()
-                    c.execute("SELECT user_id FROM users WHERE banned=0")
-                    users = c.fetchall()
+                    conn = sqlite3.connect(DB_FILE)
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT user_id FROM users")
+                    users = cursor.fetchall()
                     conn.close()
                     
-                    sent = 0
+                    # Buton oluştur
+                    button = InlineKeyboardButton(button_name, url=button_url)
+                    keyboard = InlineKeyboardMarkup([[button]])
+                    
+                    sent_count = 0
                     for user_row in users:
                         try:
                             await context.bot.send_message(
-                                user_row[0],
-                                "🔗 **Yeni bağlantı!**",
-                                reply_markup=reply_markup
+                                chat_id=user_row[0],
+                                text="🔗 **Yeni bağlantı!**",
+                                reply_markup=keyboard,
+                                parse_mode=ParseMode.MARKDOWN
                             )
-                            sent += 1
-                            await asyncio.sleep(0.1)
+                            sent_count += 1
                         except:
                             continue
                     
-                    await update.message.reply_text(f"✅ {sent} kullanıcıya gönderildi!")
+                    await update.message.reply_text(
+                        f"✅ Buton {sent_count} kullanıcıya gönderildi!\n\n"
+                        f"**Buton:** {button_name}\n"
+                        f"**URL:** {button_url}",
+                        parse_mode=ParseMode.MARKDOWN
+                    )
                     
                 except Exception as e:
                     await update.message.reply_text(f"❌ Hata: {e}")
         
-        context.user_data.pop('quick_button', None)
+        context.user_data.pop('waiting_for_button', None)
         return
     
-    # Broadcast
-    if context.user_data.get('broadcast'):
-        text = update.message.text
+    # Broadcast mesajı
+    if context.user_data.get('waiting_for_broadcast'):
+        message_text = update.message.text
         
+        # Tüm kullanıcılara gönder
         try:
-            conn = sqlite3.connect(DB_NAME)
-            c = conn.cursor()
-            c.execute("SELECT user_id FROM users WHERE banned=0")
-            users = c.fetchall()
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute("SELECT user_id FROM users")
+            users = cursor.fetchall()
             conn.close()
             
-            sent = 0
+            sent_count = 0
             for user_row in users:
                 try:
                     await context.bot.send_message(
-                        user_row[0],
-                        text,
+                        chat_id=user_row[0],
+                        text=message_text,
                         parse_mode=ParseMode.MARKDOWN
                     )
-                    sent += 1
-                    await asyncio.sleep(0.1)
+                    sent_count += 1
                 except:
                     continue
             
-            await update.message.reply_text(f"✅ {sent} kullanıcıya gönderildi!")
+            await update.message.reply_text(
+                f"✅ Duyuru {sent_count} kullanıcıya gönderildi!",
+                parse_mode=ParseMode.MARKDOWN
+            )
             
         except Exception as e:
             await update.message.reply_text(f"❌ Hata: {e}")
         
-        context.user_data.pop('broadcast', None)
+        context.user_data.pop('waiting_for_broadcast', None)
         return
 
-# Admin geri
-async def admin_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+# /cancel komutu
+async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """İşlem iptali"""
+    user = update.effective_user
+    if user.id != ADMIN_ID:
+        return
     
-    keyboard = [
-        [InlineKeyboardButton("📢 Duyuru Gönder", callback_data="admin_broadcast")],
-        [InlineKeyboardButton("⚡ Hızlı Buton", callback_data="admin_quickbtn")],
-        [InlineKeyboardButton("📊 İstatistikler", callback_data="admin_stats")]
-    ]
+    context.user_data.pop('waiting_for_button', None)
+    context.user_data.pop('waiting_for_broadcast', None)
     
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(
-        "👑 **Admin Paneli**",
-        reply_markup=reply_markup
-    )
+    await update.message.reply_text("❌ İşlem iptal edildi.")
 
 # Hata handler
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Hataları yakala"""
     logger.error(f"Hata: {context.error}")
 
 # Ana fonksiyon
-def main():
+def main() -> None:
+    """Botu başlat"""
     # Application oluştur
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # Komutlar
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("leng", leng_command))
-    application.add_handler(CommandHandler("app", app_command))
-    application.add_handler(CommandHandler("help", help_menu))
+    # Komut handler'ları
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("language", language_command))
+    application.add_handler(CommandHandler("prompts", prompts_command))
+    application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("admin", admin_command))
+    application.add_handler(CommandHandler("cancel", cancel_command))
     
-    # Callback'ler
-    application.add_handler(CallbackQueryHandler(select_language, pattern="^lang_"))
-    application.add_handler(CallbackQueryHandler(help_menu, pattern="^help_menu$"))
-    application.add_handler(CallbackQueryHandler(show_main_menu, pattern="^main_menu$"))
-    application.add_handler(CallbackQueryHandler(change_language_menu, pattern="^change_lang$"))
+    # Callback query handler'ları
+    application.add_handler(CallbackQueryHandler(language_callback, pattern="^lang_"))
+    application.add_handler(CallbackQueryHandler(main_menu_callback, pattern="^main_menu$"))
+    application.add_handler(CallbackQueryHandler(help_command, pattern="^help$"))
+    application.add_handler(CallbackQueryHandler(change_language_command, pattern="^change_lang$"))
     
-    # Admin callback'ler
-    application.add_handler(CallbackQueryHandler(admin_stats, pattern="^admin_stats$"))
-    application.add_handler(CallbackQueryHandler(admin_quickbtn, pattern="^admin_quickbtn$"))
-    application.add_handler(CallbackQueryHandler(admin_broadcast, pattern="^admin_broadcast$"))
-    application.add_handler(CallbackQueryHandler(admin_back, pattern="^admin_back$"))
+    # Admin callback handler'ları
+    application.add_handler(CallbackQueryHandler(admin_stats_callback, pattern="^admin_stats$"))
+    application.add_handler(CallbackQueryHandler(admin_quick_button_callback, pattern="^admin_quick_button$"))
+    application.add_handler(CallbackQueryHandler(admin_broadcast_callback, pattern="^admin_broadcast$"))
+    application.add_handler(CallbackQueryHandler(admin_back_callback, pattern="^admin_back$"))
     
-    # Admin mesajları
+    # Admin mesaj handler'ı
     application.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND & filters.User(ADMIN_ID),
-        handle_admin_messages
+        handle_admin_message
     ))
     
     # Hata handler
@@ -588,7 +645,10 @@ def main():
     
     # Botu başlat
     logger.info("Bot başlatılıyor...")
-    application.run_polling(drop_pending_updates=True)
+    application.run_polling(
+        drop_pending_updates=True,
+        allowed_updates=Update.ALL_TYPES
+    )
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
