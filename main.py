@@ -35,10 +35,7 @@ ADMIN_ID = 5541236874
 CHANNEL_ID = -1002072605977
 CHANNEL_LINK = "https://t.me/+wet-9MZuj044ZGQy"
 
-# 4) DUYURU SİSTEMİ İÇİN DURUMLAR
-BROADCAST_TEXT, BROADCAST_PHOTO, BROADCAST_VIDEO = range(3)
-
-# 5) VERİTABANI BAĞLANTISI
+# 4) VERİTABANI BAĞLANTISI
 DB_NAME = "bot_database.db"
 
 def init_db():
@@ -68,7 +65,7 @@ def init_db():
 
 init_db()
 
-# 6) DİL SİSTEMİ
+# 5) DİL SİSTEMİ
 LANGUAGES = {
     'tr': {'flag': '🇹🇷', 'name': 'Türkçe'},
     'en': {'flag': '🇬🇧', 'name': 'English'},
@@ -92,7 +89,7 @@ def get_message(key: str, lang: str) -> str:
     conn.close()
     return result[0] if result else f"[{key}]"
 
-# 7) ZORUNLU KANAL KONTROLÜ
+# 6) ZORUNLU KANAL KONTROLÜ
 async def check_subscription(user_id: int, bot) -> bool:
     try:
         member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
@@ -101,7 +98,7 @@ async def check_subscription(user_id: int, bot) -> bool:
         logger.error(f"Kanal kontrol hatası: {e}")
         return True
 
-# 8) DİL SEÇİMİ EKRANI
+# 7) DİL SEÇİMİ EKRANI
 async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user = update.effective_user
@@ -154,7 +151,7 @@ async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE)
             reply_markup=reply_markup
         )
 
-# 9) DİL SEÇİLDİĞİNDE
+# 8) DİL SEÇİLDİĞİNDE
 async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -182,7 +179,7 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await send_welcome_menu(user_id, context.bot, lang_code)
 
-# 10) HOŞGELDİN MENÜSÜ
+# 9) HOŞGELDİN MENÜSÜ
 async def send_welcome_menu(user_id: int, bot, lang: str):
     welcome_text = get_message('welcome', lang)
     
@@ -230,7 +227,7 @@ async def send_welcome_menu(user_id: int, bot, lang: str):
         parse_mode=ParseMode.HTML
     )
 
-# 11) /start KOMUTU
+# 10) /start KOMUTU
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     
@@ -257,7 +254,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await language_selection(update, context)
 
-# 12) ZORUNLU KANAL MESAJI
+# 11) ZORUNLU KANAL MESAJI
 async def ask_for_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     
@@ -294,7 +291,7 @@ async def ask_for_subscription(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_markup=reply_markup
         )
 
-# 13) ABONE KONTROLÜ BUTONU
+# 12) ABONE KONTROLÜ BUTONU
 async def check_subscription_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -321,7 +318,7 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
         }
         await query.edit_message_text(messages[user_lang])
 
-# 14) YARDIM MENÜSÜ
+# 13) YARDIM MENÜSÜ
 async def help_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -384,7 +381,7 @@ async def help_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# 15) /leng KOMUTU
+# 14) /leng KOMUTU
 async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     
@@ -423,7 +420,7 @@ async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-# 16) DİL DEĞİŞTİRME CALLBACK
+# 15) DİL DEĞİŞTİRME CALLBACK
 async def change_language_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -449,7 +446,7 @@ async def change_language_callback(update: Update, context: ContextTypes.DEFAULT
     )
     await send_welcome_menu(user_id, context.bot, lang_code)
 
-# 17) /app KOMUTU
+# 16) /app KOMUTU
 async def app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     
@@ -496,7 +493,7 @@ async def app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-# 18) GERİ BUTONU
+# 17) GERİ BUTONU
 async def back_to_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -506,7 +503,11 @@ async def back_to_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await send_welcome_menu(user_id, context.bot, user_lang)
 
-# 19) ADMIN KOMUTLARI
+# ============================
+# DUYURU SİSTEMİ (YENİ)
+# ============================
+
+# 18) ADMIN KOMUTLARI
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
@@ -514,11 +515,11 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     keyboard = [
-        [InlineKeyboardButton("📢 Duyuru Gönder", callback_data="admin_broadcast")],
+        [InlineKeyboardButton("📢 Duyuru Gönder", callback_data="start_broadcast")],
         [InlineKeyboardButton("📊 İstatistikler", callback_data="admin_stats")],
+        [InlineKeyboardButton("🧪 Test Mesajı", callback_data="admin_test")],
         [InlineKeyboardButton("🚫 Kullanıcı Banla", callback_data="admin_ban_menu")],
-        [InlineKeyboardButton("✅ Kullanıcı Ban Kaldır", callback_data="admin_unban_menu")],
-        [InlineKeyboardButton("🧪 Test Mesajı", callback_data="admin_test")]
+        [InlineKeyboardButton("✅ Kullanıcı Ban Kaldır", callback_data="admin_unban_menu")]
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -528,321 +529,372 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# 20) ADMIN BROADCAST MENÜ
-async def admin_broadcast_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# 19) DUYURU BAŞLATMA
+async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    keyboard = [
-        [InlineKeyboardButton("📝 Metin Duyurusu", callback_data="broadcast_text")],
-        [InlineKeyboardButton("🖼️ Resimli Duyuru", callback_data="broadcast_photo")],
-        [InlineKeyboardButton("📹 Videolu Duyuru", callback_data="broadcast_video")],
-        [InlineKeyboardButton("◀️ Geri", callback_data="admin_back")]
-    ]
+    # Duyuru verilerini temizle
+    context.user_data['broadcast_data'] = {
+        'text': '',
+        'photo': None,
+        'video': None,
+        'button_text': '',
+        'button_url': '',
+        'step': 'text'
+    }
     
-    reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(
-        "**Duyuru Türü Seçin:**\n\n"
-        "• Metin Duyurusu: Sadece yazı\n"
-        "• Resimli Duyuru: Resim + altına yazı\n"
-        "• Videolu Duyuru: Video + altına yazı",
-        reply_markup=reply_markup,
+        "📢 **Duyuru Oluşturma**\n\n"
+        "1️⃣ **Metin:** Duyuru metnini yazın\n"
+        "2️⃣ **Medya (İsteğe bağlı):** Resim veya video gönderin\n"
+        "3️⃣ **Buton (İsteğe bağlı):** Buton metni ve linki\n\n"
+        "**Şimdi duyuru metnini yazın:**\n"
+        "(İptal için /cancel)",
         parse_mode=ParseMode.MARKDOWN
     )
 
-# 21) BROADCAST TEXT BAŞLAT
-async def broadcast_text_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    await query.edit_message_text(
-        "📝 **Metin Duyurusu**\n\n"
-        "Lütfen göndermek istediğiniz mesajı yazın.\n"
-        "İptal etmek için /cancel yazın.\n\n"
-        "**Örnek:**\n"
-        "Merhaba! Yeni güncellemelerimiz var...",
-        parse_mode=ParseMode.MARKDOWN
-    )
-    
-    return BROADCAST_TEXT
-
-# 22) BROADCAST PHOTO BAŞLAT
-async def broadcast_photo_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    await query.edit_message_text(
-        "🖼️ **Resimli Duyuru**\n\n"
-        "Lütfen göndermek istediğiniz resmi gönderin.\n"
-        "İptal etmek için /cancel yazın.",
-        parse_mode=ParseMode.MARKDOWN
-    )
-    
-    return BROADCAST_PHOTO
-
-# 23) BROADCAST VIDEO BAŞLAT
-async def broadcast_video_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    await query.edit_message_text(
-        "📹 **Videolu Duyuru**\n\n"
-        "Lütfen göndermek istediğiniz videoyu gönderin.\n"
-        "İptal etmek için /cancel yazın.",
-        parse_mode=ParseMode.MARKDOWN
-    )
-    
-    return BROADCAST_VIDEO
-
-# 24) METİN DUYURUSU İŞLEME
-async def broadcast_text_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# 20) DUYURU METNİ ALMA
+async def receive_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
-        return ConversationHandler.END
+        return
     
-    message_text = update.message.text
+    broadcast_data = context.user_data.get('broadcast_data', {})
     
-    # Onay butonları
-    keyboard = [
-        [
-            InlineKeyboardButton("✅ Evet, Gönder", callback_data=f"confirm_broadcast_text:{message_text}"),
-            InlineKeyboardButton("❌ Hayır, İptal", callback_data="cancel_broadcast")
+    if broadcast_data.get('step') == 'text':
+        broadcast_data['text'] = update.message.text
+        broadcast_data['step'] = 'media'
+        
+        keyboard = [
+            [InlineKeyboardButton("🖼️ Resim Ekle", callback_data="add_photo")],
+            [InlineKeyboardButton("📹 Video Ekle", callback_data="add_video")],
+            [InlineKeyboardButton("🔘 Buton Ekle", callback_data="add_button")],
+            [InlineKeyboardButton("📤 Hemen Gönder", callback_data="send_now")]
         ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.message.reply_text(
-        f"**Duyuru Önizleme:**\n\n{message_text}\n\n"
-        f"Bu mesaj tüm kullanıcılara gönderilecek. Onaylıyor musunuz?",
-        reply_markup=reply_markup,
-        parse_mode=ParseMode.MARKDOWN
-    )
-    
-    return ConversationHandler.END
-
-# 25) RESİMLİ DUYURU İŞLEME
-async def broadcast_photo_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if user.id != ADMIN_ID:
-        return ConversationHandler.END
-    
-    if not update.message.photo:
-        await update.message.reply_text("Lütfen bir resim gönderin.")
-        return BROADCAST_PHOTO
-    
-    # En büyük resmi al
-    photo = update.message.photo[-1]
-    caption = update.message.caption or ""
-    
-    # Resmi context'e kaydet
-    context.user_data['broadcast_photo'] = photo.file_id
-    context.user_data['broadcast_caption'] = caption
-    
-    # Onay butonları
-    keyboard = [
-        [
-            InlineKeyboardButton("✅ Evet, Gönder", callback_data="confirm_broadcast_photo"),
-            InlineKeyboardButton("❌ Hayır, İptal", callback_data="cancel_broadcast")
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.message.reply_photo(
-        photo=photo.file_id,
-        caption=f"**Duyuru Önizleme:**\n\n{caption}\n\n"
-                f"Bu resim tüm kullanıcılara gönderilecek. Onaylıyor musunuz?",
-        reply_markup=reply_markup,
-        parse_mode=ParseMode.MARKDOWN
-    )
-    
-    return ConversationHandler.END
-
-# 26) VİDEOLU DUYURU İŞLEME
-async def broadcast_video_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if user.id != ADMIN_ID:
-        return ConversationHandler.END
-    
-    if not update.message.video:
-        await update.message.reply_text("Lütfen bir video gönderin.")
-        return BROADCAST_VIDEO
-    
-    video = update.message.video
-    caption = update.message.caption or ""
-    
-    # Videoyu context'e kaydet
-    context.user_data['broadcast_video'] = video.file_id
-    context.user_data['broadcast_caption'] = caption
-    
-    # Onay butonları
-    keyboard = [
-        [
-            InlineKeyboardButton("✅ Evet, Gönder", callback_data="confirm_broadcast_video"),
-            InlineKeyboardButton("❌ Hayır, İptal", callback_data="cancel_broadcast")
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.message.reply_video(
-        video=video.file_id,
-        caption=f"**Duyuru Önizleme:**\n\n{caption}\n\n"
-                f"Bu video tüm kullanıcılara gönderilecek. Onaylıyor musunuz?",
-        reply_markup=reply_markup,
-        parse_mode=ParseMode.MARKDOWN
-    )
-    
-    return ConversationHandler.END
-
-# 27) DUYURU GÖNDERME
-async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    if query.data.startswith("confirm_broadcast_text:"):
-        # Metin duyurusu
-        message_text = query.data.split(":", 1)[1]
-        await query.edit_message_text("📤 Duyuru gönderiliyor...")
+        reply_markup = InlineKeyboardMarkup(keyboard)
         
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute("SELECT user_id FROM users WHERE banned=0")
-        users = c.fetchall()
-        conn.close()
-        
-        success = 0
-        failed = 0
-        
-        for user in users:
-            try:
-                await context.bot.send_message(
-                    chat_id=user[0],
-                    text=message_text,
-                    parse_mode=ParseMode.MARKDOWN
-                )
-                success += 1
-                await asyncio.sleep(0.1)  # Rate limit için
-            except Exception as e:
-                failed += 1
-                logger.error(f"Duyuru gönderilemedi {user[0]}: {e}")
-        
-        await query.edit_message_text(
-            f"✅ Duyuru tamamlandı!\n\n"
-            f"• Başarılı: {success}\n"
-            f"• Başarısız: {failed}\n"
-            f"• Toplam: {success + failed}"
+        await update.message.reply_text(
+            f"✅ **Metin kaydedildi:**\n\n{update.message.text}\n\n"
+            f"**Ne yapmak istiyorsunuz?**\n"
+            f"• Resim/Video ekleyebilirsiniz\n"
+            f"• Buton ekleyebilirsiniz\n"
+            f"• Direkt gönderebilirsiniz",
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.MARKDOWN
         )
+
+# 21) RESİM EKLEME
+async def add_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
     
-    elif query.data == "confirm_broadcast_photo":
-        # Resimli duyuru
-        photo_id = context.user_data.get('broadcast_photo')
-        caption = context.user_data.get('broadcast_caption', '')
+    context.user_data['broadcast_data']['step'] = 'waiting_photo'
+    
+    await query.edit_message_text(
+        "🖼️ **Resim Ekleyin**\n\n"
+        "Lütfen duyuruya eklemek istediğiniz resmi gönderin.\n"
+        "(İptal için /cancel)",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+# 22) VIDEO EKLEME
+async def add_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    context.user_data['broadcast_data']['step'] = 'waiting_video'
+    
+    await query.edit_message_text(
+        "📹 **Video Ekleyin**\n\n"
+        "Lütfen duyuruya eklemek istediğiniz videoyu gönderin.\n"
+        "(İptal için /cancel)",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+# 23) MEDYA ALMA (Resim/Video)
+async def receive_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user.id != ADMIN_ID:
+        return
+    
+    broadcast_data = context.user_data.get('broadcast_data', {})
+    
+    if broadcast_data.get('step') == 'waiting_photo' and update.message.photo:
+        # En büyük resmi al
+        photo = update.message.photo[-1]
+        broadcast_data['photo'] = photo.file_id
+        broadcast_data['step'] = 'media_done'
         
-        if not photo_id:
-            await query.edit_message_text("❌ Resim bulunamadı!")
-            return
+        await show_broadcast_preview(update, context, "✅ Resim eklendi!")
         
-        await query.edit_message_text("📤 Resimli duyuru gönderiliyor...")
+    elif broadcast_data.get('step') == 'waiting_video' and update.message.video:
+        video = update.message.video
+        broadcast_data['video'] = video.file_id
+        broadcast_data['step'] = 'media_done'
         
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute("SELECT user_id FROM users WHERE banned=0")
-        users = c.fetchall()
-        conn.close()
+        await show_broadcast_preview(update, context, "✅ Video eklendi!")
+    else:
+        await update.message.reply_text("Lütfen resim veya video gönderin.")
+
+# 24) BUTON EKLEME
+async def add_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    context.user_data['broadcast_data']['step'] = 'button_text'
+    
+    await query.edit_message_text(
+        "🔘 **Buton Ekleme**\n\n"
+        "1️⃣ **Buton metnini yazın:**\n"
+        "Örnek: 'Katıl', 'İndir', 'Web Sitemiz'\n\n"
+        "(İptal için /cancel)",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+# 25) BUTON METNİ ALMA
+async def receive_button_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user.id != ADMIN_ID:
+        return
+    
+    broadcast_data = context.user_data.get('broadcast_data', {})
+    
+    if broadcast_data.get('step') == 'button_text':
+        broadcast_data['button_text'] = update.message.text
+        broadcast_data['step'] = 'button_url'
         
-        success = 0
-        failed = 0
+        await update.message.reply_text(
+            f"✅ **Buton metni:** {update.message.text}\n\n"
+            f"2️⃣ **Şimdi buton linkini yazın:**\n"
+            f"Örnek: https://t.me/kanal_linki\n\n"
+            f"(İptal için /cancel)",
+            parse_mode=ParseMode.MARKDOWN
+        )
+
+# 26) BUTON LİNKİ ALMA
+async def receive_button_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user.id != ADMIN_ID:
+        return
+    
+    broadcast_data = context.user_data.get('broadcast_data', {})
+    
+    if broadcast_data.get('step') == 'button_url':
+        broadcast_data['button_url'] = update.message.text
+        broadcast_data['step'] = 'button_done'
         
-        for user in users:
-            try:
+        await show_broadcast_preview(update, context, "✅ Buton eklendi!")
+
+# 27) DUYURU ÖNİZLEME GÖSTER
+async def show_broadcast_preview(update: Update, context: ContextTypes.DEFAULT_TYPE, message=""):
+    broadcast_data = context.user_data.get('broadcast_data', {})
+    
+    preview_text = "📢 **DUYURU ÖNİZLEME**\n\n"
+    
+    # Medya bilgisi
+    if broadcast_data.get('photo'):
+        preview_text += "🖼️ **Resim:** ✓ Var\n"
+    elif broadcast_data.get('video'):
+        preview_text += "📹 **Video:** ✓ Var\n"
+    else:
+        preview_text += "📝 **Medya:** Yok\n"
+    
+    # Buton bilgisi
+    if broadcast_data.get('button_text') and broadcast_data.get('button_url'):
+        preview_text += f"🔘 **Buton:** {broadcast_data['button_text']}\n"
+        preview_text += f"🔗 **Link:** {broadcast_data['button_url']}\n"
+    else:
+        preview_text += "🔘 **Buton:** Yok\n"
+    
+    preview_text += f"\n**Metin:**\n{broadcast_data.get('text', '')}\n"
+    
+    # Butonlar
+    keyboard = []
+    
+    # Medya butonları
+    media_buttons = []
+    if not broadcast_data.get('photo') and not broadcast_data.get('video'):
+        media_buttons.append(InlineKeyboardButton("🖼️ Resim Ekle", callback_data="add_photo"))
+        media_buttons.append(InlineKeyboardButton("📹 Video Ekle", callback_data="add_video"))
+    
+    # Buton ekleme
+    if not broadcast_data.get('button_text'):
+        media_buttons.append(InlineKeyboardButton("🔘 Buton Ekle", callback_data="add_button"))
+    
+    if media_buttons:
+        keyboard.append(media_buttons)
+    
+    # Ana butonlar
+    keyboard.append([
+        InlineKeyboardButton("📤 Gönder", callback_data="confirm_send_broadcast"),
+        InlineKeyboardButton("✏️ Düzenle", callback_data="edit_broadcast"),
+        InlineKeyboardButton("❌ İptal", callback_data="cancel_broadcast_final")
+    ])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    if hasattr(update, 'message'):
+        await update.message.reply_text(
+            f"{message}\n\n{preview_text}" if message else preview_text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.MARKDOWN
+        )
+    elif hasattr(update, 'callback_query'):
+        query = update.callback_query
+        await query.edit_message_text(
+            f"{message}\n\n{preview_text}" if message else preview_text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.MARKDOWN
+        )
+
+# 28) SEND_NOW (Direkt gönder)
+async def send_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    await confirm_send_broadcast(update, context)
+
+# 29) DUYURU GÖNDERME ONAY
+async def confirm_send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    broadcast_data = context.user_data.get('broadcast_data', {})
+    
+    if not broadcast_data.get('text'):
+        await query.edit_message_text("❌ Duyuru metni bulunamadı!")
+        return
+    
+    # Onay mesajı
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Evet, Gönder", callback_data="execute_broadcast"),
+            InlineKeyboardButton("❌ Hayır, İptal", callback_data="cancel_broadcast_final")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        "⚠️ **SON ONAY**\n\n"
+        "Bu duyuru TÜM kullanıcılara gönderilecek.\n"
+        "Emin misiniz?",
+        reply_markup=reply_markup,
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+# 30) DUYURUYU GERÇEKTEN GÖNDER
+async def execute_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    await query.edit_message_text("📤 Duyuru gönderiliyor... Lütfen bekleyin.")
+    
+    broadcast_data = context.user_data.get('broadcast_data', {})
+    
+    # Tüm kullanıcıları al
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT user_id FROM users WHERE banned=0")
+    users = c.fetchall()
+    conn.close()
+    
+    total_users = len(users)
+    success = 0
+    failed = 0
+    
+    # Buton oluştur
+    reply_markup = None
+    if broadcast_data.get('button_text') and broadcast_data.get('button_url'):
+        keyboard = [[InlineKeyboardButton(
+            broadcast_data['button_text'],
+            url=broadcast_data['button_url']
+        )]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # Her kullanıcıya gönder
+    for i, user in enumerate(users):
+        try:
+            user_id = user[0]
+            
+            # Medya türüne göre gönder
+            if broadcast_data.get('photo'):
                 await context.bot.send_photo(
-                    chat_id=user[0],
-                    photo=photo_id,
-                    caption=caption,
+                    chat_id=user_id,
+                    photo=broadcast_data['photo'],
+                    caption=broadcast_data['text'],
+                    reply_markup=reply_markup,
                     parse_mode=ParseMode.MARKDOWN
                 )
-                success += 1
-                await asyncio.sleep(0.1)
-            except Exception as e:
-                failed += 1
-                logger.error(f"Resimli duyuru gönderilemedi {user[0]}: {e}")
-        
-        await query.edit_message_text(
-            f"✅ Resimli duyuru tamamlandı!\n\n"
-            f"• Başarılı: {success}\n"
-            f"• Başarısız: {failed}\n"
-            f"• Toplam: {success + failed}"
-        )
-    
-    elif query.data == "confirm_broadcast_video":
-        # Videolu duyuru
-        video_id = context.user_data.get('broadcast_video')
-        caption = context.user_data.get('broadcast_caption', '')
-        
-        if not video_id:
-            await query.edit_message_text("❌ Video bulunamadı!")
-            return
-        
-        await query.edit_message_text("📤 Videolu duyuru gönderiliyor...")
-        
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute("SELECT user_id FROM users WHERE banned=0")
-        users = c.fetchall()
-        conn.close()
-        
-        success = 0
-        failed = 0
-        
-        for user in users:
-            try:
+            elif broadcast_data.get('video'):
                 await context.bot.send_video(
-                    chat_id=user[0],
-                    video=video_id,
-                    caption=caption,
+                    chat_id=user_id,
+                    video=broadcast_data['video'],
+                    caption=broadcast_data['text'],
+                    reply_markup=reply_markup,
                     parse_mode=ParseMode.MARKDOWN
                 )
-                success += 1
-                await asyncio.sleep(0.1)
-            except Exception as e:
-                failed += 1
-                logger.error(f"Videolu duyuru gönderilemedi {user[0]}: {e}")
-        
-        await query.edit_message_text(
-            f"✅ Videolu duyuru tamamlandı!\n\n"
-            f"• Başarılı: {success}\n"
-            f"• Başarısız: {failed}\n"
-            f"• Toplam: {success + failed}"
-        )
-
-# 28) DUYURU İPTAL
-async def cancel_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+            else:
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text=broadcast_data['text'],
+                    reply_markup=reply_markup,
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            
+            success += 1
+            
+            # Her 10 mesajda bir bekle (rate limit için)
+            if i % 10 == 0:
+                await asyncio.sleep(0.5)
+                
+        except Exception as e:
+            failed += 1
+            logger.error(f"Duyuru gönderilemedi {user[0]}: {e}")
     
-    await query.edit_message_text("❌ Duyuru iptal edildi.")
-    return ConversationHandler.END
-
-# 29) ADMIN GERİ BUTONU
-async def admin_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    # Sonuç mesajı
+    result_text = (
+        f"✅ **DUYURU TAMAMLANDI**\n\n"
+        f"📊 **İstatistikler:**\n"
+        f"• Toplam Kullanıcı: {total_users}\n"
+        f"• Başarılı: {success}\n"
+        f"• Başarısız: {failed}\n\n"
+        f"⏱️ **Gönderim süresi:** Tamamlandı"
+    )
     
-    keyboard = [
-        [InlineKeyboardButton("📢 Duyuru Gönder", callback_data="admin_broadcast")],
-        [InlineKeyboardButton("📊 İstatistikler", callback_data="admin_stats")],
-        [InlineKeyboardButton("🚫 Kullanıcı Banla", callback_data="admin_ban_menu")],
-        [InlineKeyboardButton("✅ Kullanıcı Ban Kaldır", callback_data="admin_unban_menu")],
-        [InlineKeyboardButton("🧪 Test Mesajı", callback_data="admin_test")]
-    ]
-    
+    keyboard = [[InlineKeyboardButton("🏠 Ana Menü", callback_data="admin_main")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
+    
     await query.edit_message_text(
-        "**Admin Paneli**\nAşağıdaki seçeneklerden birini seçin:",
+        result_text,
         reply_markup=reply_markup,
         parse_mode=ParseMode.MARKDOWN
     )
+    
+    # Temizle
+    context.user_data.pop('broadcast_data', None)
 
-# 30) ADMIN İSTATİSTİKLER
+# 31) DUZENLEME
+async def edit_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    await start_broadcast(update, context)
+
+# 32) İPTAL
+async def cancel_broadcast_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer("❌ Duyuru iptal edildi")
+    
+    # Temizle
+    context.user_data.pop('broadcast_data', None)
+    
+    await query.edit_message_text(
+        "❌ Duyuru iptal edildi.\n\n"
+        "Ana menüye dönmek için /admin yazın."
+    )
+
+# 33) ADMIN İSTATİSTİKLER
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -884,7 +936,7 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lang_name = LANGUAGES.get(lang, {}).get('name', lang)
         stats_text += f"  {LANGUAGES.get(lang, {}).get('flag', '')} {lang_name}: `{count}`\n"
     
-    keyboard = [[InlineKeyboardButton("◀️ Geri", callback_data="admin_back")]]
+    keyboard = [[InlineKeyboardButton("◀️ Geri", callback_data="admin_main")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(
@@ -893,35 +945,7 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# 31) ADMIN BAN MENÜ
-async def admin_ban_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    await query.edit_message_text(
-        "🚫 **Kullanıcı Banlama**\n\n"
-        "Kullanıcıyı banlamak için komutu kullanın:\n"
-        "`/ban <user_id>`\n\n"
-        "**Örnek:**\n"
-        "`/ban 1234567890`",
-        parse_mode=ParseMode.MARKDOWN
-    )
-
-# 32) ADMIN UNBAN MENÜ
-async def admin_unban_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    await query.edit_message_text(
-        "✅ **Kullanıcı Ban Kaldırma**\n\n"
-        "Kullanıcının banını kaldırmak için komutu kullanın:\n"
-        "`/unban <user_id>`\n\n"
-        "**Örnek:**\n"
-        "`/unban 1234567890`",
-        parse_mode=ParseMode.MARKDOWN
-    )
-
-# 33) ADMIN TEST MESAJI
+# 34) ADMIN TEST MESAJI
 async def admin_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -933,7 +957,7 @@ async def admin_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_welcome_menu(query.from_user.id, context.bot, lang_code)
         await asyncio.sleep(1)
     
-    keyboard = [[InlineKeyboardButton("◀️ Geri", callback_data="admin_back")]]
+    keyboard = [[InlineKeyboardButton("◀️ Geri", callback_data="admin_main")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(
@@ -941,7 +965,66 @@ async def admin_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-# 34) İSTATİSTİKLER (/stats) - Komut versiyonu
+# 35) ADMIN BAN MENÜ
+async def admin_ban_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    await query.edit_message_text(
+        "🚫 **Kullanıcı Banlama**\n\n"
+        "Kullanıcıyı banlamak için komutu kullanın:\n"
+        "`/ban <user_id>`\n\n"
+        "**Örnek:**\n"
+        "`/ban 1234567890`\n\n"
+        "◀️ Geri dönmek için /admin yazın.",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+# 36) ADMIN UNBAN MENÜ
+async def admin_unban_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    await query.edit_message_text(
+        "✅ **Kullanıcı Ban Kaldırma**\n\n"
+        "Kullanıcının banını kaldırmak için komutu kullanın:\n"
+        "`/unban <user_id>`\n\n"
+        "**Örnek:**\n"
+        "`/unban 1234567890`\n\n"
+        "◀️ Geri dönmek için /admin yazın.",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+# 37) ADMIN ANA MENÜ
+async def admin_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    keyboard = [
+        [InlineKeyboardButton("📢 Duyuru Gönder", callback_data="start_broadcast")],
+        [InlineKeyboardButton("📊 İstatistikler", callback_data="admin_stats")],
+        [InlineKeyboardButton("🧪 Test Mesajı", callback_data="admin_test")],
+        [InlineKeyboardButton("🚫 Kullanıcı Banla", callback_data="admin_ban_menu")],
+        [InlineKeyboardButton("✅ Kullanıcı Ban Kaldır", callback_data="admin_unban_menu")]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    try:
+        await query.edit_message_text(
+            "**Admin Paneli**\nAşağıdaki seçeneklerden birini seçin:",
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.MARKDOWN
+        )
+    except:
+        await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text="**Admin Paneli**\nAşağıdaki seçeneklerden birini seçin:",
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.MARKDOWN
+        )
+
+# 38) İSTATİSTİKLER (/stats) - Komut versiyonu
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
@@ -981,7 +1064,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(stats_text, parse_mode=ParseMode.MARKDOWN)
 
-# 35) BAN/UNBAN SİSTEMİ
+# 39) BAN/UNBAN SİSTEMİ
 async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
@@ -1042,7 +1125,7 @@ async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         await update.message.reply_text("❌ Geçersiz kullanıcı ID'si.")
 
-# 36) /test KOMUTU
+# 40) /test KOMUTU
 async def test_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
@@ -1057,7 +1140,7 @@ async def test_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text("✅ Tüm dil versiyonları test edildi.")
 
-# 37) HATA YAKALAMA
+# 41) HATA YAKALAMA
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(msg="Exception occurred:", exc_info=context.error)
     
@@ -1070,35 +1153,23 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         pass
 
-# 38) CONVERSATION İPTAL
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("İşlem iptal edildi.")
-    return ConversationHandler.END
+# 42) İPTAL KOMUTU
+async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user.id != ADMIN_ID:
+        return
+    
+    # Temizle
+    context.user_data.pop('broadcast_data', None)
+    
+    await update.message.reply_text(
+        "❌ İşlem iptal edildi.\n\n"
+        "Yeni duyuru için /admin yazın."
+    )
 
-# 39) ANA UYGULAMA
+# 43) ANA UYGULAMA
 def main():
     application = Application.builder().token(BOT_TOKEN).build()
-    
-    # Conversation Handler for Broadcast
-    broadcast_conv_handler = ConversationHandler(
-        entry_points=[
-            CallbackQueryHandler(broadcast_text_start, pattern="^broadcast_text$"),
-            CallbackQueryHandler(broadcast_photo_start, pattern="^broadcast_photo$"),
-            CallbackQueryHandler(broadcast_video_start, pattern="^broadcast_video$")
-        ],
-        states={
-            BROADCAST_TEXT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_text_process)
-            ],
-            BROADCAST_PHOTO: [
-                MessageHandler(filters.PHOTO, broadcast_photo_process)
-            ],
-            BROADCAST_VIDEO: [
-                MessageHandler(filters.VIDEO, broadcast_video_process)
-            ]
-        },
-        fallbacks=[CommandHandler("cancel", cancel)]
-    )
     
     # Komut handler'ları
     application.add_handler(CommandHandler("start", start))
@@ -1110,6 +1181,7 @@ def main():
     application.add_handler(CommandHandler("unban", unban_command))
     application.add_handler(CommandHandler("test", test_command))
     application.add_handler(CommandHandler("help", lambda u,c: help_menu(u,c) if u.callback_query else None))
+    application.add_handler(CommandHandler("cancel", cancel_command))
     
     # Callback query handler'ları
     application.add_handler(CallbackQueryHandler(set_language, pattern="^setlang_"))
@@ -1119,17 +1191,41 @@ def main():
     application.add_handler(CallbackQueryHandler(back_to_welcome, pattern="^back_to_welcome$"))
     
     # Admin callback handler'ları
-    application.add_handler(CallbackQueryHandler(admin_broadcast_menu, pattern="^admin_broadcast$"))
+    application.add_handler(CallbackQueryHandler(start_broadcast, pattern="^start_broadcast$"))
+    application.add_handler(CallbackQueryHandler(add_photo, pattern="^add_photo$"))
+    application.add_handler(CallbackQueryHandler(add_video, pattern="^add_video$"))
+    application.add_handler(CallbackQueryHandler(add_button, pattern="^add_button$"))
+    application.add_handler(CallbackQueryHandler(send_now, pattern="^send_now$"))
+    application.add_handler(CallbackQueryHandler(confirm_send_broadcast, pattern="^confirm_send_broadcast$"))
+    application.add_handler(CallbackQueryHandler(execute_broadcast, pattern="^execute_broadcast$"))
+    application.add_handler(CallbackQueryHandler(edit_broadcast, pattern="^edit_broadcast$"))
+    application.add_handler(CallbackQueryHandler(cancel_broadcast_final, pattern="^cancel_broadcast_final$"))
     application.add_handler(CallbackQueryHandler(admin_stats, pattern="^admin_stats$"))
+    application.add_handler(CallbackQueryHandler(admin_test, pattern="^admin_test$"))
     application.add_handler(CallbackQueryHandler(admin_ban_menu, pattern="^admin_ban_menu$"))
     application.add_handler(CallbackQueryHandler(admin_unban_menu, pattern="^admin_unban_menu$"))
-    application.add_handler(CallbackQueryHandler(admin_test, pattern="^admin_test$"))
-    application.add_handler(CallbackQueryHandler(admin_back, pattern="^admin_back$"))
-    application.add_handler(CallbackQueryHandler(send_broadcast, pattern="^confirm_broadcast"))
-    application.add_handler(CallbackQueryHandler(cancel_broadcast, pattern="^cancel_broadcast$"))
+    application.add_handler(CallbackQueryHandler(admin_main, pattern="^admin_main$"))
     
-    # Broadcast conversation handler
-    application.add_handler(broadcast_conv_handler)
+    # Mesaj handler'ları (duyuru için)
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND & filters.User(ADMIN_ID),
+        receive_broadcast_text
+    ))
+    
+    application.add_handler(MessageHandler(
+        (filters.PHOTO | filters.VIDEO) & filters.User(ADMIN_ID),
+        receive_media
+    ))
+    
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND & filters.User(ADMIN_ID),
+        receive_button_text
+    ))
+    
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND & filters.User(ADMIN_ID),
+        receive_button_url
+    ))
     
     # Hata handler
     application.add_error_handler(error_handler)
