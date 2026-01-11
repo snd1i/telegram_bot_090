@@ -2,10 +2,13 @@ import logging
 from telegram import Update
 from telegram.ext import CallbackContext
 
-from config import TOKEN, CHANNEL_ID
+from config import TOKEN, CHANNEL_ID, is_admin
 from database import db
 from languages import get_text
 from keyboards import language_keyboard, subscribe_keyboard, main_menu_keyboard
+
+# Admin modülünü import et
+from admin import admin_command, admin_callback_handler
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +114,14 @@ def button_handler(update: Update, context: CallbackContext):
     
     user_id = update.effective_user.id
     data = query.data
+    
+    # Admin callback'leri admin modülüne yönlendir
+    if data.startswith(("mb_", "admin_", "format_", "stats_", "setting_", "edit_", "broadcast_")):
+        if is_admin(user_id):
+            admin_callback_handler(update, context)
+        else:
+            query.edit_message_text("❌ Bu işlemi yapma yetkiniz yok!")
+        return
     
     # Dil seçimi
     if data.startswith("lang_"):
