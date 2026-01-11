@@ -1,8 +1,1 @@
-.env
-*.pyc
-__pycache__/
-venv/
-.env.local
-secrets.txt
-config.json
-*.log
+users.json
