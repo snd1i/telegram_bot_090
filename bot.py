@@ -1,311 +1,428 @@
 import os
 import logging
-import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
+from telegram.ext import (
+    Application, CommandHandler, CallbackQueryHandler, 
+    MessageHandler, filters, ContextTypes
+)
+from telegram.error import BadRequest
 
-# ============ AYARLAR ============
-BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
-OWNER_ID = "5541236874"  # SİZİN ID'NİZ
-
-# Kullanıcıları kaydetmek için JSON dosyası
-USERS_FILE = "users.json"
+# Kendi dosyalarımızı import ediyoruz
+import config
+from database import Database, BannedUsers
+from messages import get_message, LANGUAGES
 
 # Log ayarı
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+logger = logging.getLogger(__name__)
 
-# ============ KULLANICI KAYDETME ============
-def save_user(user_id, username, first_name):
-    """Kullanıcıyı JSON dosyasına kaydet"""
-    try:
-        # Dosya varsa oku, yoksa oluştur
-        if os.path.exists(USERS_FILE):
-            with open(USERS_FILE, 'r', encoding='utf-8') as f:
-                users = json.load(f)
-        else:
-            users = {}
-        
-        # Kullanıcıyı ekle/güncelle
-        users[str(user_id)] = {
-            "username": username,
-            "first_name": first_name,
-            "joined_at": logging.Formatter().formatTime(logging.makeLogRecord({}))
-        }
-        
-        # Kaydet
-        with open(USERS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(users, f, ensure_ascii=False, indent=2)
-            
-    except Exception as e:
-        logging.error(f"Kullanıcı kaydetme hatası: {e}")
+# Veritabanı
+db = Database()
+banned_users = BannedUsers()
 
-def get_all_users():
-    """Tüm kullanıcıları getir"""
+# ============ YARDIMCI FONKSİYONLAR ============
+async def is_user_subscribed(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Kullanıcı kanalda mı kontrol et"""
     try:
-        if os.path.exists(USERS_FILE):
-            with open(USERS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        return {}
+        member = await context.bot.get_chat_member(
+            chat_id=config.FORCE_CHANNEL,
+            user_id=user_id
+        )
+        return member.status in ['member', 'administrator', 'creator']
     except:
-        return {}
+        return False
+
+def is_owner(user_id: int) -> bool:
+    """Kullanıcı owner mı kontrol et"""
+    return user_id == config.OWNER_ID
+
+def get_user_language(user_id):
+    """Kullanıcının dilini getir"""
+    user = db.get_user(user_id)
+    if user:
+        return user[4]  # language column
+    return 'tr'  # Varsayılan Türkçe
 
 # ============ /start KOMUTU ============
-async def start(update: Update, context):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    user_id = user.id
+    
+    # Ban kontrolü
+    if banned_users.is_banned(user_id):
+        await update.message.reply_text("🚫 Bu botu kullanma izniniz yok.")
+        return
     
     # Kullanıcıyı kaydet
-    save_user(user.id, user.username, user.first_name)
+    db.add_user(user_id, user.username, user.first_name, user.last_name or "")
+    db.update_last_active(user_id)
     
-    # SADECE SİZ GÖREBİLİRSİNİZ (Owner paneli)
-    if str(user.id) == OWNER_ID:
-        keyboard = [
-            [InlineKeyboardButton("📢 Duyuru Gönder", callback_data='send_broadcast')],
-            [InlineKeyboardButton("👥 Kullanıcılar", callback_data='show_users')],
-            [InlineKeyboardButton("ℹ️ Yardım", callback_data='help')]
-        ]
+    # Kullanıcıyı getir
+    user_data = db.get_user(user_id)
+    
+    # İlk kez mi geliyor? (language yoksa veya 'tr' ise)
+    if not user_data or user_data[4] == 'tr':
+        # DİL SEÇİMİ GÖSTER
+        keyboard = []
+        row = []
+        for lang_code, lang_info in LANGUAGES.items():
+            button = InlineKeyboardButton(
+                f"{lang_info['flag']} {lang_info['name']}",
+                callback_data=f"lang_{lang_code}"
+            )
+            row.append(button)
+            if len(row) == 2:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await update.message.reply_text(
-            f'👑 Merhaba Sahip {user.first_name}!\n\n'
-            f'📊 Bot İstatistikleri:\n'
-            f'• Toplam Kullanıcı: {len(get_all_users())}\n\n'
-            f'Ne yapmak istersiniz?',
+            "👋 Welcome! / Hoşgeldiniz! / بەخێربێیت!\n\n"
+            "🌍 **Please select your language:**\n"
+            "**Lütfen dilinizi seçin:**\n"
+            "**تکایە زمانێک هەڵبژێرە:**",
             reply_markup=reply_markup
         )
+        return
+    
+    # Zaten dil seçmiş, abonelik kontrolü yap
+    user_lang = user_data[4]
+    is_subscribed = await is_user_subscribed(user_id, context)
+    
+    if is_subscribed:
+        # Zaten abone, hoşgeldin mesajı (sadece ilk kez)
+        if config.WELCOME_ACTIVE and user_data[6] == 0:  # is_subscribed = 0
+            welcome_keyboard = [
+                [InlineKeyboardButton("📢 Our Channel", url=f"https://t.me/{config.FORCE_CHANNEL[1:]}")],
+                [InlineKeyboardButton("🤖 Prompt Library", callback_data="prompts")],
+                [InlineKeyboardButton("🌐 Change Language", callback_data="change_lang")]
+            ]
+            reply_markup = InlineKeyboardMarkup(welcome_keyboard)
+            
+            await update.message.reply_text(
+                f"🎉 **{get_message(user_lang, 'welcome_back')}**\n\n"
+                f"✅ **{get_message(user_lang, 'already_sub')}**\n\n"
+                f"🤖 Bot features are ready to use!\n"
+                f"Use /help for commands.",
+                reply_markup=reply_markup
+            )
+            db.update_subscription(user_id, 1)
+        else:
+            # Sessiz mod - sadece butonlar
+            pass
     else:
-        # NORMAL KULLANICILAR
+        # ABONE OLMAYANLAR
         keyboard = [
-            [InlineKeyboardButton("📢 Kanalım", url="https://t.me/snd_yatirim")],
-            [InlineKeyboardButton("🌟 Sahibim", url="https://t.me/snd1i")]
+            [InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{config.FORCE_CHANNEL[1:]}")],
+            [InlineKeyboardButton("✅ I Joined", callback_data="check_sub")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await update.message.reply_text(
-            f'👋 Merhaba {user.first_name}!\n\n'
-            f'Ben SND Yatırım Asistanıyım.\n\n'
-            f'✅ Özellikler:\n'
-            f'• Duyuruları takip et\n'
-            f'• Yatırım sinyalleri\n'
-            f'• Güncel bilgiler\n\n'
-            f'Sahibimden duyuruları buradan alacaksın!',
+            f"{get_message(user_lang, 'force_sub')}\n"
+            f"{config.FORCE_CHANNEL}",
             reply_markup=reply_markup
         )
 
 # ============ BUTON İŞLEMLERİ ============
-async def button_handler(update: Update, context):
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    user_id = query.from_user.id
     
-    user_id = str(query.from_user.id)
-    
-    # Sadece siz tıklayabilirsiniz
-    if user_id != OWNER_ID:
-        await query.edit_message_text("❌ Bu panel sadece yönetici içindir!")
+    # Ban kontrolü
+    if banned_users.is_banned(user_id):
+        await query.edit_message_text("🚫 Access denied.")
         return
     
-    if query.data == 'send_broadcast':
+    data = query.data
+    
+    # DİL SEÇİMİ
+    if data.startswith("lang_"):
+        lang_code = data.split("_")[1]
+        db.update_user_language(user_id, lang_code)
+        user_lang = lang_code
+        
+        # Abonelik kontrolü
+        is_subscribed = await is_user_subscribed(user_id, context)
+        
+        if is_subscribed:
+            # Zaten abone, direkt hoşgeldin
+            db.update_subscription(user_id, 1)
+            
+            welcome_keyboard = [
+                [InlineKeyboardButton("📢 Channel", url=f"https://t.me/{config.FORCE_CHANNEL[1:]}")],
+                [InlineKeyboardButton("🤖 Prompts", callback_data="prompts")],
+                [InlineKeyboardButton("🌐 Language", callback_data="change_lang")]
+            ]
+            reply_markup = InlineKeyboardMarkup(welcome_keyboard)
+            
+            await query.edit_message_text(
+                f"✅ **{get_message(user_lang, 'sub_success')}**\n\n"
+                f"🎉 Welcome to the bot!\n"
+                f"Your language: {LANGUAGES[lang_code]['flag']} {LANGUAGES[lang_code]['name']}\n\n"
+                f"Use /help for commands.",
+                reply_markup=reply_markup
+            )
+        else:
+            # Abone değil, kanala yönlendir
+            keyboard = [
+                [InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{config.FORCE_CHANNEL[1:]}")],
+                [InlineKeyboardButton("✅ Check Subscription", callback_data="check_sub")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(
+                f"{get_message(user_lang, 'force_sub')}\n"
+                f"{config.FORCE_CHANNEL}",
+                reply_markup=reply_markup
+            )
+    
+    # ABONE KONTROLÜ
+    elif data == "check_sub":
+        user_lang = get_user_language(user_id)
+        is_subscribed = await is_user_subscribed(user_id, context)
+        
+        if is_subscribed:
+            db.update_subscription(user_id, 1)
+            
+            welcome_keyboard = [
+                [InlineKeyboardButton("📢 Channel", url=f"https://t.me/{config.FORCE_CHANNEL[1:]}")],
+                [InlineKeyboardButton("🤖 Prompts", callback_data="prompts")],
+                [InlineKeyboardButton("🌐 Language", callback_data="change_lang")]
+            ]
+            reply_markup = InlineKeyboardMarkup(welcome_keyboard)
+            
+            await query.edit_message_text(
+                f"✅ **{get_message(user_lang, 'sub_success')}**\n\n"
+                f"🤖 Bot is ready!\n"
+                f"Use /help for commands.",
+                reply_markup=reply_markup
+            )
+        else:
+            await query.edit_message_text(
+                f"❌ {get_message(user_lang, 'sub_required')}\n"
+                f"{config.FORCE_CHANNEL}"
+            )
+    
+    # DİL DEĞİŞTİRME
+    elif data == "change_lang":
+        keyboard = []
+        row = []
+        for lang_code, lang_info in LANGUAGES.items():
+            button = InlineKeyboardButton(
+                f"{lang_info['flag']} {lang_info['name']}",
+                callback_data=f"setlang_{lang_code}"
+            )
+            row.append(button)
+            if len(row) == 2:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "📢 **Tüm Kullanıcılara Duyuru Gönder**\n\n"
-            "Şimdi gönderin:\n"
-            "• Yazı mesajı\n"
-            "• Resim + altyazı\n"
-            "• Video + altyazı\n\n"
-            "Gönderdiğiniz her şey TÜM kullanıcılara gidecek.\n\n"
-            "ℹ️ İptal için /start yazın."
+            "🌍 Select your language:",
+            reply_markup=reply_markup
         )
-        context.user_data['waiting_broadcast'] = True
-        
-    elif query.data == 'show_users':
-        users = get_all_users()
-        if not users:
-            await query.edit_message_text("📭 Henüz hiç kullanıcı yok.")
-            return
-        
-        user_list = "\n".join([f"• {data['first_name']} (@{data['username'] or 'yok'})" 
-                              for data in list(users.values())[:20]])
-        
+    
+    # DİL AYARLA
+    elif data.startswith("setlang_"):
+        lang_code = data.split("_")[1]
+        db.update_user_language(user_id, lang_code)
         await query.edit_message_text(
-            f"👥 **Son 20 Kullanıcı**\n\n"
-            f"{user_list}\n\n"
-            f"📊 Toplam: {len(users)} kullanıcı"
+            f"✅ Language changed to {LANGUAGES[lang_code]['flag']} {LANGUAGES[lang_code]['name']}"
         )
+    
+    # PROMPT LİBRARY
+    elif data == "prompts":
+        user_lang = get_user_language(user_id)
         
-    elif query.data == 'help':
+        keyboard = [
+            [InlineKeyboardButton("💬 ChatGPT Prompts", callback_data="chatgpt_prompts")],
+            [InlineKeyboardButton("🎨 DALL-E Prompts", callback_data="dalle_prompts")],
+            [InlineKeyboardButton("📝 Writing Prompts", callback_data="writing_prompts")],
+            [InlineKeyboardButton("🔙 Back", callback_data="main_menu")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
         await query.edit_message_text(
-            "🤖 **Yönetici Kılavuzu**\n\n"
-            "📢 **Duyuru Gönder:**\n"
-            "1. '📢 Duyuru Gönder' butonuna tıkla\n"
-            "2. Mesajını gönder (yazı/resim/video)\n"
-            "3. Bot tüm kullanıcılara gönderecek\n\n"
-            "👥 **Kullanıcılar:**\n"
-            "• Tüm bot kullanıcılarını gör\n"
-            "• Toplam sayıyı kontrol et\n\n"
-            "💡 **Not:** Her /start yazan kullanıcı otomatik kaydedilir."
+            "🤖 **Prompt Library**\n\n"
+            "Select a category:",
+            reply_markup=reply_markup
         )
 
-# ============ DUYURU GÖNDERME (TÜM KULLANICILARA) ============
-async def handle_broadcast(update: Update, context):
-    if str(update.effective_user.id) != OWNER_ID:
-        return
-    
-    if not context.user_data.get('waiting_broadcast'):
-        return
-    
-    message = update.message
-    users = get_all_users()
-    
-    if not users:
-        await message.reply_text("❌ Henüz hiç kullanıcı yok!")
-        context.user_data['waiting_broadcast'] = False
-        return
-    
-    # İstatistik
-    success_count = 0
-    fail_count = 0
-    
-    # İlk mesaj - "Gönderiliyor..."
-    status_msg = await message.reply_text(
-        f"⏳ Duyuru gönderiliyor...\n"
-        f"Toplam {len(users)} kullanıcı\n"
-        f"Başarılı: 0\n"
-        f"Başarısız: 0"
-    )
-    
-    try:
-        # RESİM ile duyuru
-        if message.photo:
-            photo = message.photo[-1]
-            caption = message.caption or "📢 Yeni Duyuru!"
-            
-            for user_id in users.keys():
-                try:
-                    await context.bot.send_photo(
-                        chat_id=int(user_id),
-                        photo=photo.file_id,
-                        caption=caption
-                    )
-                    success_count += 1
-                except:
-                    fail_count += 1
-                
-                # Her 5 gönderimde bir güncelle
-                if success_count % 5 == 0:
-                    await status_msg.edit_text(
-                        f"⏳ Duyuru gönderiliyor...\n"
-                        f"Toplam {len(users)} kullanıcı\n"
-                        f"Başarılı: {success_count}\n"
-                        f"Başarısız: {fail_count}"
-                    )
-        
-        # VIDEO ile duyuru
-        elif message.video:
-            video = message.video
-            caption = message.caption or "📢 Yeni Duyuru!"
-            
-            for user_id in users.keys():
-                try:
-                    await context.bot.send_video(
-                        chat_id=int(user_id),
-                        video=video.file_id,
-                        caption=caption
-                    )
-                    success_count += 1
-                except:
-                    fail_count += 1
-                
-                if success_count % 5 == 0:
-                    await status_msg.edit_text(
-                        f"⏳ Duyuru gönderiliyor...\n"
-                        f"Toplam {len(users)} kullanıcı\n"
-                        f"Başarılı: {success_count}\n"
-                        f"Başarısız: {fail_count}"
-                    )
-        
-        # METİN ile duyuru
-        elif message.text:
-            text = message.text
-            
-            for user_id in users.keys():
-                try:
-                    await context.bot.send_message(
-                        chat_id=int(user_id),
-                        text=text
-                    )
-                    success_count += 1
-                except:
-                    fail_count += 1
-                
-                if success_count % 5 == 0:
-                    await status_msg.edit_text(
-                        f"⏳ Duyuru gönderiliyor...\n"
-                        f"Toplam {len(users)} kullanıcı\n"
-                        f"Başarılı: {success_count}\n"
-                        f"Başarısız: {fail_count}"
-                    )
-        
-        # Sonuç mesajı
-        await status_msg.edit_text(
-            f"✅ **Duyuru Tamamlandı!**\n\n"
-            f"📊 İstatistikler:\n"
-            f"• Toplam Kullanıcı: {len(users)}\n"
-            f"• Başarılı: {success_count}\n"
-            f"• Başarısız: {fail_count}\n"
-            f"• Başarı Oranı: %{int((success_count/len(users))*100)}"
-        )
-        
-    except Exception as e:
-        await message.reply_text(f"❌ Hata oluştu: {str(e)}")
-    
-    finally:
-        context.user_data['waiting_broadcast'] = False
+# ============ YÖNETİCİ KOMUTLARI ============
 
-# ============ /istatistik KOMUTU (SADECE SİZ) ============
-async def stats(update: Update, context):
-    if str(update.effective_user.id) != OWNER_ID:
+# /band - Kullanıcı engelle
+async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_owner(update.effective_user.id):
         return
     
-    users = get_all_users()
+    if not context.args:
+        await update.message.reply_text("Usage: /band @username")
+        return
+    
+    username = context.args[0].replace("@", "")
+    banned_users.add(username)
+    
+    await update.message.reply_text(f"✅ User @{username} has been banned.")
+
+# /unband - Engeli kaldır
+async def unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_owner(update.effective_user.id):
+        return
+    
+    if not context.args:
+        await update.message.reply_text("Usage: /unband @username")
+        return
+    
+    username = context.args[0].replace("@", "")
+    banned_users.remove(username)
+    
+    await update.message.reply_text(f"✅ User @{username} has been unbanned.")
+
+# /bandlist - Engellenenler listesi
+async def ban_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_owner(update.effective_user.id):
+        return
+    
+    banned_list = banned_users.load()
+    if not banned_list:
+        await update.message.reply_text("No banned users.")
+        return
+    
+    users_text = "\n".join([f"• @{user}" for user in banned_list])
+    await update.message.reply_text(f"🚫 **Banned Users:**\n\n{users_text}")
+
+# /user - İstatistikler
+async def user_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_owner(update.effective_user.id):
+        return
+    
+    daily = db.get_user_count("daily")
+    weekly = db.get_user_count("weekly")
+    monthly = db.get_user_count("monthly")
+    total = db.get_user_count("all")
+    
+    stats_text = f"""
+📊 **Bot Statistics:**
+
+📈 Daily New Users: {daily}
+📈 Weekly New Users: {weekly}
+📈 Monthly New Users: {monthly}
+👥 Total Users: {total}
+
+✅ Active Features:
+• Bot Status: {'🟢 Active' if config.BOT_ACTIVE else '🔴 Paused'}
+• Welcome Msg: {'🟢 Active' if config.WELCOME_ACTIVE else '🔴 Disabled'}
+• Force Channel: {config.FORCE_CHANNEL}
+    """
+    
+    await update.message.reply_text(stats_text)
+
+# /settings - Bot ayarları
+async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_owner(update.effective_user.id):
+        return
+    
+    keyboard = [
+        [InlineKeyboardButton("🟢 Bot Active", callback_data="toggle_bot")],
+        [InlineKeyboardButton("👋 Welcome Msg", callback_data="toggle_welcome")],
+        [InlineKeyboardButton("📢 Change Channel", callback_data="change_channel")],
+        [InlineKeyboardButton("📝 Edit Messages", callback_data="edit_messages")],
+        [InlineKeyboardButton("➕ Add Command", callback_data="add_command")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(
-        f"📊 **Bot İstatistikleri**\n\n"
-        f"👥 Toplam Kullanıcı: {len(users)}\n\n"
-        f"📈 Son 5 Kullanıcı:\n" +
-        "\n".join([f"• {data['first_name']}" 
-                  for data in list(users.values())[-5:]])
+        "⚙️ **Bot Settings Panel**\n\n"
+        "Select an option to modify:",
+        reply_markup=reply_markup
     )
 
-# ============ ANA PROGRAM ============
-def main():
-    print("=" * 50)
-    print("🤖 BOT BAŞLATILIYOR - TÜM KULLANICILARA DUYURU")
-    print(f"👑 Sahip ID: {OWNER_ID}")
-    print("=" * 50)
+# /help - Yardım
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
     
-    # Token kontrol
-    if not BOT_TOKEN:
-        print("❌ HATA: TELEGRAM_BOT_TOKEN yok!")
+    help_text = get_message(user_lang, 'help')
+    await update.message.reply_text(help_text, parse_mode='Markdown')
+
+# /lang - Dil değiştir
+async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
+    keyboard = []
+    row = []
+    for lang_code, lang_info in LANGUAGES.items():
+        button = InlineKeyboardButton(
+            f"{lang_info['flag']} {lang_info['name']}",
+            callback_data=f"setlang_{lang_code}"
+        )
+        row.append(button)
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(
+        "🌍 Select your language:",
+        reply_markup=reply_markup
+    )
+
+# /app - App bilgisi
+async def app_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_lang = get_user_language(update.effective_user.id)
+    
+    await update.message.reply_text(
+        "🤖 **Prompt Assistant Bot**\n\n"
+        "Version: 1.0.0\n"
+        "Creator: @snd1i\n\n"
+        "Features:\n"
+        "• Multi-language support\n"
+        "• Prompt library\n"
+        "• Channel subscription\n"
+        "• User management"
+    )
+
+# ============ ANA FONKSİYON ============
+def main():
+    if not config.BOT_TOKEN:
+        logger.error("❌ TELEGRAM_BOT_TOKEN not found!")
         return
     
-    # Bot oluştur
-    app = Application.builder().token(BOT_TOKEN).build()
+    # Bot uygulamasını oluştur
+    application = Application.builder().token(config.BOT_TOKEN).build()
     
-    # Komutlar
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("istatistik", stats))
-    app.add_handler(CallbackQueryHandler(button_handler))
+    # KOMUTLARI EKLE
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("lang", change_language))
+    application.add_handler(CommandHandler("app", app_info))
     
-    # Mesajlar (duyuru için)
-    app.add_handler(MessageHandler(
-        filters.PHOTO | filters.VIDEO | filters.TEXT & ~filters.COMMAND,
-        handle_broadcast
-    ))
+    # YÖNETİCİ KOMUTLARI
+    application.add_handler(CommandHandler("band", ban_user))
+    application.add_handler(CommandHandler("unband", unban_user))
+    application.add_handler(CommandHandler("bandlist", ban_list))
+    application.add_handler(CommandHandler("user", user_stats))
+    application.add_handler(CommandHandler("settings", settings))
     
-    # Başlat
-    print("✅ Bot hazır! /start yazın...")
-    app.run_polling()
+    # BUTON İŞLEYİCİ
+    application.add_handler(CallbackQueryHandler(button_handler))
+    
+    # BOTU BAŞLAT
+    logger.info("🤖 Bot starting...")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
     main()
