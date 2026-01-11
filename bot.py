@@ -9,6 +9,7 @@ from handlers import (
     button_handler,
     error_handler
 )
+from admin import admin_command  # Admin komutu import
 
 # Log ayarları
 logging.basicConfig(
@@ -33,6 +34,7 @@ def main():
     dp.add_handler(CommandHandler("help", help_command))
     dp.add_handler(CommandHandler("language", language_command))
     dp.add_handler(CommandHandler("lang", language_command))
+    dp.add_handler(CommandHandler("admin", admin_command))  # Admin komutu
     
     # Buton handler'ını ekle
     dp.add_handler(CallbackQueryHandler(button_handler))
@@ -44,7 +46,9 @@ def main():
     print("=" * 50)
     print("🤖 MultiLanguage Bot Başlatılıyor...")
     print("📁 Modüler yapı aktif")
+    print("🔧 Admin paneli aktif")
     print("🌍 5 dil destekli")
+    print("📊 JSON veritabanı aktif")
     print("=" * 50)
     
     updater.start_polling()
