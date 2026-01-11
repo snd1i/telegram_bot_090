@@ -1,4 +1,4 @@
-# extensions/admin.py - DİL DESTEKLİ ADMIN PANELİ
+# extensions/admin.py - DİL DESTEKLİ ADMIN PANELİ (ÇALIŞAN)
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 import json
@@ -172,7 +172,7 @@ async def admin_button_callback(update: Update, context: ContextTypes.DEFAULT_TY
     user_id = query.from_user.id
     user_lang = get_user_lang(user_id)
     texts = ADMIN_TEXTS[user_lang]
-    buttons = BUTON_TEXTS[user_lang]
+    buttons = BUTTON_TEXTS[user_lang]  # DÜZELTME: BUTON_TEXTS değil, BUTTON_TEXTS
     
     if not is_admin(user_id):
         await query.edit_message_text(texts['admin_only'])
