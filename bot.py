@@ -490,7 +490,7 @@ def main():
     # ANA komut işleyicileri
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('join', join_command))
-    application.add_handler(CallbackQueryHandler(button_callback))
+    application.add_handler(CallbackQueryHandler(button_callback, pattern=None))
     
     # EKLENTİLERİ YÜKLE
     load_extensions(application)
