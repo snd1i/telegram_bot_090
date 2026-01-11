@@ -652,43 +652,139 @@ async def add_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# 25) BUTON METNİ ALMA
+# BUTON METNİ ALMA FONKSİYONU - DÜZELTİLMİŞ VERSİYON
 async def receive_button_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
         return
     
+    # HATA DÜZELTMESİ: broadcast_data kontrolü ekleyin
+    if 'broadcast_data' not in context.user_data:
+        await update.message.reply_text("❌ Duyuru verisi bulunamadı. Lütfen /admin ile yeniden başlayın.")
+        return
+    
     broadcast_data = context.user_data.get('broadcast_data', {})
     
-    if broadcast_data.get('step') == 'button_text':
-        broadcast_data['button_text'] = update.message.text
-        broadcast_data['step'] = 'button_url'
-        
+    # HATA DÜZELTMESİ: step kontrolü düzeltildi
+    if broadcast_data.get('step') != 'button_text':
+        # Eğer yanlış adımda ise, kullanıcıyı yönlendir
         await update.message.reply_text(
-            f"✅ **Buton metni:** {update.message.text}\n\n"
-            f"2️⃣ **Şimdi buton linkini yazın:**\n"
-            f"Örnek: https://t.me/kanal_linki\n\n"
-            f"(İptal için /cancel)",
-            parse_mode=ParseMode.MARKDOWN
+            "❌ Yanlış adım. Lütfen buton eklemek için '🔘 Buton Ekle' butonuna tıklayın."
         )
+        return
+    
+    broadcast_data['button_text'] = update.message.text
+    broadcast_data['step'] = 'button_url'
+    
+    await update.message.reply_text(
+        f"✅ **Buton metni:** {update.message.text}\n\n"
+        f"2️⃣ **Şimdi buton linkini yazın:**\n"
+        f"Örnek: https://t.me/kanal_linki\n\n"
+        f"(İptal için /cancel)",
+        parse_mode=ParseMode.MARKDOWN
+    )
 
-# 26) BUTON LİNKİ ALMA
+# BUTON LİNKİ ALMA FONKSİYONU - DÜZELTİLMİŞ VERSİYON
 async def receive_button_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
         return
     
+    # HATA DÜZELTMESİ: broadcast_data kontrolü ekleyin
+    if 'broadcast_data' not in context.user_data:
+        await update.message.reply_text("❌ Duyuru verisi bulunamadı. Lütfen /admin ile yeniden başlayın.")
+        return
+    
     broadcast_data = context.user_data.get('broadcast_data', {})
     
-    if broadcast_data.get('step') == 'button_url':
-        broadcast_data['button_url'] = update.message.text
-        broadcast_data['step'] = 'button_done'
-        
-        await show_broadcast_preview(update, context, "✅ Buton eklendi!")
+    # HATA DÜZELTMESİ: step kontrolü düzeltildi
+    if broadcast_data.get('step') != 'button_url':
+        await update.message.reply_text(
+            "❌ Yanlış adım. Lütfen önce buton metnini yazın."
+        )
+        return
+    
+    broadcast_data['button_url'] = update.message.text
+    broadcast_data['step'] = 'button_done'
+    
+    # Önizlemeyi göster
+    await show_broadcast_preview(update, context, "✅ Buton eklendi!")
 
-# 27) DUYURU ÖNİZLEME GÖSTER
+# DUYURU ÖNİZLEME FONKSİYONU - HATA DÜZELTMESİ
 async def show_broadcast_preview(update: Update, context: ContextTypes.DEFAULT_TYPE, message=""):
+    # HATA DÜZELTMESİ: broadcast_data kontrolü
+    if 'broadcast_data' not in context.user_data:
+        if hasattr(update, 'message'):
+            await update.message.reply_text("❌ Duyuru verisi bulunamadı.")
+        return
+    
     broadcast_data = context.user_data.get('broadcast_data', {})
+    
+    preview_text = "📢 **DUYURU ÖNİZLEME**\n\n"
+    
+    # Medya bilgisi
+    if broadcast_data.get('photo'):
+        preview_text += "🖼️ **Resim:** ✓ Var\n"
+    elif broadcast_data.get('video'):
+        preview_text += "📹 **Video:** ✓ Var\n"
+    else:
+        preview_text += "📝 **Medya:** Yok\n"
+    
+    # Buton bilgisi
+    if broadcast_data.get('button_text') and broadcast_data.get('button_url'):
+        preview_text += f"🔘 **Buton:** {broadcast_data['button_text']}\n"
+        preview_text += f"🔗 **Link:** {broadcast_data['button_url']}\n"
+    else:
+        preview_text += "🔘 **Buton:** Yok\n"
+    
+    preview_text += f"\n**Metin:**\n{broadcast_data.get('text', '')}\n"
+    
+    # Butonlar
+    keyboard = []
+    
+    # Medya butonları
+    media_buttons = []
+    if not broadcast_data.get('photo') and not broadcast_data.get('video'):
+        media_buttons.append(InlineKeyboardButton("🖼️ Resim Ekle", callback_data="add_photo"))
+        media_buttons.append(InlineKeyboardButton("📹 Video Ekle", callback_data="add_video"))
+    
+    # Buton ekleme
+    if not broadcast_data.get('button_text'):
+        media_buttons.append(InlineKeyboardButton("🔘 Buton Ekle", callback_data="add_button"))
+    
+    if media_buttons:
+        keyboard.append(media_buttons)
+    
+    # Ana butonlar
+    keyboard.append([
+        InlineKeyboardButton("📤 Gönder", callback_data="confirm_send_broadcast"),
+        InlineKeyboardButton("✏️ Düzenle", callback_data="edit_broadcast"),
+        InlineKeyboardButton("❌ İptal", callback_data="cancel_broadcast_final")
+    ])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    if hasattr(update, 'message'):
+        await update.message.reply_text(
+            f"{message}\n\n{preview_text}" if message else preview_text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.MARKDOWN
+        )
+    elif hasattr(update, 'callback_query'):
+        query = update.callback_query
+        try:
+            await query.edit_message_text(
+                f"{message}\n\n{preview_text}" if message else preview_text,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.MARKDOWN
+            )
+        except:
+            await context.bot.send_message(
+                chat_id=query.from_user.id,
+                text=f"{message}\n\n{preview_text}" if message else preview_text,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.MARKDOWN
+            )    broadcast_data = context.user_data.get('broadcast_data', {})
     
     preview_text = "📢 **DUYURU ÖNİZLEME**\n\n"
     
