@@ -1,263 +1,134 @@
 import logging
-import json
 import sqlite3
 import os
-import re
-from datetime import datetime, date
-from typing import Dict, Optional, Tuple, List
-from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup,
-    BotCommand, BotCommandScopeChat, InputMediaPhoto, InputMediaVideo
-)
-from telegram.ext import (
-    Application, CommandHandler, CallbackQueryHandler,
-    MessageHandler, filters, ContextTypes, ConversationHandler
-)
+from datetime import date
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from telegram.constants import ParseMode
 import asyncio
-import sys
 
-# 1) LOGLAMA AYARI - Geliştirilmiş
+# Basit logging ayarı
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO,
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('bot.log')
-    ]
+    level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# 2) TOKEN'ı Railway Environment Variable'dan al
+# Token kontrolü
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-
 if not BOT_TOKEN:
-    logger.error("BOT_TOKEN environment variable bulunamadı!")
-    logger.error("Lütfen Railway dashboard'da Variables sekmesine BOT_TOKEN ekleyin")
-    sys.exit(1)
+    logger.error("BOT_TOKEN bulunamadı!")
+    raise ValueError("BOT_TOKEN ayarlanmamış")
 
-# 3) DİĞER AYARLAR
+# Ayarlar
 ADMIN_ID = 5541236874
-CHANNEL_ID = -1002072605977
 CHANNEL_LINK = "https://t.me/+wet-9MZuj044ZGQy"
 PROMPT_LINK = "https://t.me/PrompttAI_bot/Prompts"
 
-# 4) VERİTABANI BAĞLANTISI - Geliştirilmiş
+# Database
 DB_NAME = "bot_database.db"
 
 def init_db():
-    conn = None
+    """Basit veritabanı başlatma"""
     try:
-        conn = sqlite3.connect(DB_NAME, check_same_thread=False)
+        conn = sqlite3.connect(DB_NAME)
         c = conn.cursor()
         
-        # Users tablosu
+        # Sadece gerekli tablolar
         c.execute('''CREATE TABLE IF NOT EXISTS users
                     (user_id INTEGER PRIMARY KEY, 
                      lang TEXT DEFAULT 'en',
                      joined_date DATE DEFAULT CURRENT_DATE,
                      banned INTEGER DEFAULT 0)''')
         
-        # Messages tablosu
-        c.execute('''CREATE TABLE IF NOT EXISTS messages
-                    (key TEXT PRIMARY KEY, 
-                     tr TEXT, en TEXT, ku TEXT, ar TEXT)''')
-        
         conn.commit()
-        
-        # Varsayılan mesajları ekle
-        default_messages = {
-            'welcome': {
-                'tr': '🤖 **Hoş geldin!**\n\nAşağıdaki seçenekleri kullanabilirsin:',
-                'en': '🤖 **Welcome!**\n\nYou can use the options below:',
-                'ku': '🤖 **بەخێربێیت!**\n\nدەتوانیت ئەم هەڵبژاردانەی خوارەوە بەکاربهێنیت:',
-                'ar': '🤖 **أهلاً بك!**\n\nيمكنك استخدام الخيارات أدناه:'
-            }
-        }
-        
-        for key, texts in default_messages.items():
-            c.execute("SELECT key FROM messages WHERE key=?", (key,))
-            if not c.fetchone():
-                c.execute("INSERT INTO messages (key, tr, en, ku, ar) VALUES (?, ?, ?, ?, ?)",
-                         (key, texts['tr'], texts['en'], texts['ku'], texts['ar']))
-        
-        conn.commit()
-        logger.info("Veritabanı başarıyla başlatıldı")
-        
+        conn.close()
+        logger.info("Database başlatıldı")
     except Exception as e:
-        logger.error(f"Veritabanı başlatma hatası: {e}")
-        raise
-    finally:
-        if conn:
-            conn.close()
+        logger.error(f"Database hatası: {e}")
 
 init_db()
 
-# 5) DİL SİSTEMİ - Optimize Edilmiş
+# Dil sistemi
 LANGUAGES = {
     'tr': {'flag': '🇹🇷', 'name': 'Türkçe'},
     'en': {'flag': '🇬🇧', 'name': 'English'},
-    'ku': {'flag': '🇹🇯', 'name': 'کوردی سۆرانی'},
+    'ku': {'flag': '🇹🇯', 'name': 'کوردی'},
     'ar': {'flag': '🇸🇦', 'name': 'العربية'}
 }
 
 def get_user_lang(user_id: int) -> str:
-    """Kullanıcının dil tercihini getir"""
-    conn = None
+    """Kullanıcı dilini getir"""
     try:
-        conn = sqlite3.connect(DB_NAME, check_same_thread=False)
+        conn = sqlite3.connect(DB_NAME)
         c = conn.cursor()
         c.execute("SELECT lang FROM users WHERE user_id=?", (user_id,))
         result = c.fetchone()
+        conn.close()
         return result[0] if result else 'en'
-    except Exception as e:
-        logger.error(f"Dil getirme hatası: {e}")
+    except:
         return 'en'
-    finally:
-        if conn:
-            conn.close()
 
-def get_message(key: str, lang: str) -> str:
-    """Dil mesajını getir"""
-    conn = None
+def save_user_lang(user_id: int, lang: str):
+    """Kullanıcı dilini kaydet"""
     try:
-        conn = sqlite3.connect(DB_NAME, check_same_thread=False)
+        conn = sqlite3.connect(DB_NAME)
         c = conn.cursor()
-        
-        # Önce belirtilen dili kontrol et
-        c.execute(f"SELECT {lang} FROM messages WHERE key=?", (key,))
-        result = c.fetchone()
-        
-        if result and result[0]:
-            return result[0]
-        
-        # Eğer yoksa İngilizce'yi dene
-        c.execute("SELECT en FROM messages WHERE key=?", (key,))
-        result = c.fetchone()
-        return result[0] if result and result[0] else f"[{key}]"
-        
+        today = date.today().isoformat()
+        c.execute("""
+            INSERT OR REPLACE INTO users (user_id, lang, joined_date) 
+            VALUES (?, ?, ?)
+        """, (user_id, lang, today))
+        conn.commit()
+        conn.close()
     except Exception as e:
-        logger.error(f"Mesaj getirme hatası {key}: {e}")
-        return f"[{key}]"
-    finally:
-        if conn:
-            conn.close()
+        logger.error(f"Kullanıcı kaydetme hatası: {e}")
 
-# 6) ZORUNLU KANAL KONTROLÜ
-async def check_subscription(user_id: int, bot) -> bool:
-    """Kullanıcının kanala abone olup olmadığını kontrol et"""
-    try:
-        member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
-        return member.status in ['member', 'administrator', 'creator']
-    except Exception as e:
-        logger.error(f"Kanal kontrol hatası: {e}")
-        return True
-
-# 7) DİL SEÇİMİ EKRANI
-async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, is_change=False):
-    """Dil seçim ekranını göster"""
+# /start komutu
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Botu başlat"""
     user = update.effective_user
+    logger.info(f"Start: {user.id}")
     
-    # Eğer dil değiştirme değilse ve kullanıcı kayıtlıysa hoşgeldin menüsüne git
-    if not is_change:
-        user_lang = get_user_lang(user.id)
-        if user_lang != 'en':  # 'en' sadece default değer
-            await send_welcome_menu(user.id, context.bot, user_lang)
-            return
-    
-    # Dil butonlarını oluştur
+    # Dil seçim ekranı
     keyboard = []
     for code, info in LANGUAGES.items():
         keyboard.append([InlineKeyboardButton(
             f"{info['flag']} {info['name']}",
-            callback_data=f"setlang_{code}"
+            callback_data=f"lang_{code}"
         )])
-    
-    # Kullanıcı diline göre mesaj seç
-    user_lang_code = user.language_code or 'en'
-    welcome_texts = {
-        'tr': '🌍 **Lütfen bir dil seçin:**',
-        'en': '🌍 **Please choose a language:**',
-        'ku': '🌍 **تکایە زمانێك هەڵبژێرە:**',
-        'ar': '🌍 **الرجاء اختيار لغة:**'
-    }
-    
-    if user_lang_code.startswith('tr'):
-        text = welcome_texts['tr']
-    elif user_lang_code.startswith('ar'):
-        text = welcome_texts['ar']
-    elif user_lang_code.startswith('ku'):
-        text = welcome_texts['ku']
-    else:
-        text = welcome_texts['en']
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # Mesajı gönder
-    if hasattr(update, 'callback_query') and update.callback_query:
-        query = update.callback_query
-        await query.answer()
-        await query.edit_message_text(text, reply_markup=reply_markup)
-    elif update.message:
-        await update.message.reply_text(text, reply_markup=reply_markup)
-    else:
-        await context.bot.send_message(
-            chat_id=user.id,
-            text=text,
-            reply_markup=reply_markup
-        )
+    await update.message.reply_text(
+        "🌍 **Please choose your language / Lütfen dilinizi seçin:**",
+        reply_markup=reply_markup
+    )
 
-# 8) DİL SEÇİLDİĞİNDE
-async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Kullanıcının dil tercihini kaydet"""
+# Dil seçimi
+async def language_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Dil seçim işlemi"""
     query = update.callback_query
     await query.answer()
     
     lang_code = query.data.split('_')[1]
     user_id = query.from_user.id
     
-    conn = None
-    try:
-        conn = sqlite3.connect(DB_NAME, check_same_thread=False)
-        c = conn.cursor()
-        today = date.today().isoformat()
-        
-        # Kullanıcıyı ekle veya güncelle
-        c.execute("""
-            INSERT OR REPLACE INTO users (user_id, lang, joined_date) 
-            VALUES (?, ?, ?)
-        """, (user_id, lang_code, today))
-        
-        conn.commit()
-        
-        # Onay mesajı
-        confirmation_texts = {
-            'tr': '✅ Dil seçildi!',
-            'en': '✅ Language selected!',
-            'ku': '✅ زمان هەڵبژێردرا!',
-            'ar': '✅ تم اختيار اللغة!'
-        }
-        
-        await query.edit_message_text(
-            f"{LANGUAGES[lang_code]['flag']} {confirmation_texts.get(lang_code, '✅ Done!')}"
-        )
-        
-        # Hoşgeldin menüsünü göster
-        await send_welcome_menu(user_id, context.bot, lang_code)
-        
-    except Exception as e:
-        logger.error(f"Dil kaydetme hatası: {e}")
-        await query.edit_message_text("❌ Bir hata oluştu. Lütfen tekrar deneyin.")
-    finally:
-        if conn:
-            conn.close()
-
-# 9) PROFESYONEL HOŞGELDİN MENÜSÜ
-async def send_welcome_menu(user_id: int, bot, lang: str):
-    """Hoşgeldin menüsünü göster"""
-    welcome_text = get_message('welcome', lang)
+    # Dil kaydet
+    save_user_lang(user_id, lang_code)
     
-    # Buton metinleri
+    # Hoşgeldin mesajı gönder
+    await send_welcome(user_id, context.bot, lang_code)
+
+async def send_welcome(user_id: int, bot, lang: str):
+    """Hoşgeldin menüsü"""
+    welcome_texts = {
+        'tr': "🤖 **Hoş geldin!**\n\nAşağıdaki butonları kullanabilirsin:",
+        'en': "🤖 **Welcome!**\n\nYou can use the buttons below:",
+        'ku': "🤖 **بەخێربێیت!**\n\nدەتوانیت ئەم دوگمانەی خوارەوە بەکاربهێنیت:",
+        'ar': "🤖 **أهلاً بك!**\n\nيمكنك استخدام الأزرار أدناه:"
+    }
+    
     button_texts = {
         'prompt': {
             'tr': '🚀 Prompt Alma',
@@ -285,7 +156,6 @@ async def send_welcome_menu(user_id: int, bot, lang: str):
         }
     }
     
-    # Butonları 2'li grid halinde düzenle
     keyboard = [
         [
             InlineKeyboardButton(
@@ -300,11 +170,11 @@ async def send_welcome_menu(user_id: int, bot, lang: str):
         [
             InlineKeyboardButton(
                 button_texts['help'][lang],
-                callback_data="help_menu"
+                callback_data="help"
             ),
             InlineKeyboardButton(
                 button_texts['language'][lang],
-                callback_data="change_lang_menu"
+                callback_data="change_lang"
             )
         ]
     ]
@@ -314,114 +184,17 @@ async def send_welcome_menu(user_id: int, bot, lang: str):
     try:
         await bot.send_message(
             chat_id=user_id,
-            text=welcome_text,
+            text=welcome_texts[lang],
             reply_markup=reply_markup,
             parse_mode=ParseMode.MARKDOWN
         )
     except Exception as e:
-        logger.error(f"Hoşgeldin menüsü gönderilemedi {user_id}: {e}")
+        logger.error(f"Hoşgeldin gönderme hatası: {e}")
 
-# 10) /start KOMUTU
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Botu başlat"""
-    user = update.effective_user
-    logger.info(f"Start komutu: {user.id} - {user.username}")
-    
-    # Ban kontrolü
-    conn = None
-    try:
-        conn = sqlite3.connect(DB_NAME, check_same_thread=False)
-        c = conn.cursor()
-        c.execute("SELECT banned FROM users WHERE user_id=?", (user.id,))
-        result = c.fetchone()
-        if result and result[0] == 1:
-            ban_texts = {
-                'tr': '🚫 Bu botu kullanma izniniz yok.',
-                'en': '🚫 You are not allowed to use this bot.',
-                'ku': '🚫 ئێوە ڕێگەتانی نییە ئەم بۆتە بەکاربهێنیت.',
-                'ar': '🚫 غير مسموح لك باستخدام هذا البوت.'
-            }
-            user_lang = get_user_lang(user.id)
-            await update.message.reply_text(ban_texts[user_lang])
-            return
-    except Exception as e:
-        logger.error(f"Ban kontrol hatası: {e}")
-    finally:
-        if conn:
-            conn.close()
-    
-    # Kanal aboneliği kontrolü
-    if not await check_subscription(user.id, context.bot):
-        await ask_for_subscription(update, context)
-        return
-    
-    await language_selection(update, context)
-
-# 11) ZORUNLU KANAL MESAJI
-async def ask_for_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Kanal aboneliği iste"""
-    user = update.effective_user
-    user_lang = get_user_lang(user.id)
-    
-    messages = {
-        'tr': "📢 **Devam etmek için lütfen kanala abone olun:**",
-        'en': "📢 **Please subscribe to the channel to continue:**",
-        'ku': "📢 **تکایە سەبسکرایبی کەناڵەکە بکە بۆ بەردەوامبوون:**",
-        'ar': "📢 **يرجى الاشتراك في القناة للمتابعة:**"
-    }
-    
-    keyboard = [
-        [
-            InlineKeyboardButton("📢 Kanalımız", url=CHANNEL_LINK),
-            InlineKeyboardButton("✅ Abone oldum", callback_data="check_subscription")
-        ]
-    ]
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    try:
-        if update.message:
-            await update.message.reply_text(
-                messages[user_lang],
-                reply_markup=reply_markup,
-                parse_mode=ParseMode.MARKDOWN
-            )
-        elif hasattr(update, 'callback_query') and update.callback_query:
-            query = update.callback_query
-            await query.edit_message_text(
-                messages[user_lang],
-                reply_markup=reply_markup,
-                parse_mode=ParseMode.MARKDOWN
-            )
-    except Exception as e:
-        logger.error(f"Kanal mesajı gönderme hatası: {e}")
-
-# 12) ABONE KONTROLÜ BUTONU
-async def check_subscription_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Abonelik kontrolü yap"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = query.from_user.id
-    
-    if await check_subscription(user_id, context.bot):
-        user_lang = get_user_lang(user_id)
-        await send_welcome_menu(user_id, context.bot, user_lang)
-    else:
-        user_lang = get_user_lang(user_id)
-        messages = {
-            'tr': "❌ Hala kanalda gözükmüyorsunuz. Lütfen abone olun ve tekrar deneyin.",
-            'en': "❌ You still don't appear in the channel. Please subscribe and try again.",
-            'ku': "❌ هێشتا لە کەناڵەکەدا دەرنەکەوتوویت. تکایە سەبسکرایب بکە و دووبارە هەوڵبدە.",
-            'ar': "❌ لا تزال غير مرئي في القناة. يرجى الاشتراك والمحاولة مرة أخرى."
-        }
-        await query.edit_message_text(messages[user_lang])
-
-# 13) YARDIM MENÜSÜ
-async def help_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Yardım menüsünü göster"""
-    user_id = None
-    if hasattr(update, 'callback_query') and update.callback_query:
+# Yardım komutu
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Yardım menüsü"""
+    if update.callback_query:
         query = update.callback_query
         await query.answer()
         user_id = query.from_user.id
@@ -431,71 +204,67 @@ async def help_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_lang = get_user_lang(user_id)
     
     help_texts = {
-        'tr': """🤖 **Bot Kullanım Kılavuzu**
+        'tr': """🤖 **Bot Kullanımı**
 
 **Komutlar:**
-• /start - Botu başlatır
-• /leng - Dil değiştirme
+• /start - Botu başlat
+• /leng - Dil değiştir
 • /app - Prompt linki
-• /help - Bu yardım mesajı
+• /help - Yardım
 
-**Özellikler:**
-• Çoklu dil desteği
-• Zorunlu kanal aboneliği
-• Admin duyuru sistemi
-• Hızlı buton oluşturma""",
-        'en': """🤖 **Bot Usage Guide**
+**Butonlar:**
+• Prompt Alma - Promptları görüntüle
+• Kanalımız - Kanalımıza katıl
+• Yardım - Bu mesajı göster
+• Dil Değiştir - Dil tercihini değiştir""",
+        'en': """🤖 **Bot Usage**
 
 **Commands:**
-• /start - Start the bot
+• /start - Start bot
 • /leng - Change language
 • /app - Prompt link
-• /help - This help message
+• /help - Help
 
-**Features:**
-• Multi-language support
-• Mandatory channel subscription
-• Admin announcement system
-• Quick button creation""",
-        'ku': """🤖 **ڕێبەری بەکارهێنانی بۆت**
+**Buttons:**
+• Get Prompts - View prompts
+• Our Channel - Join our channel
+• Help - Show this message
+• Change Language - Change language preference""",
+        'ku': """🤖 **بەکارهێنانی بۆت**
 
 **فەرمانەکان:**
-• /start - بۆتەکە دەستپێبکە
+• /start - بۆت دەستپێبکە
 • /leng - زمان بگۆڕە
 • /app - لینکی پرۆمپت
-• /help - ئەم پەیامی یارمەتییە
+• /help - یارمەتی
 
-**تایبەتمەندییەکان:**
-• پشتگیری فرە زمان
-• سەبسکرایبی ناچاری کەناڵ
-• سیستەمی ڕاگەیاندنی ئەدمین
-• دروستکردنی دوگمەی خێرا""",
-        'ar': """🤖 **دليل استخدام البوت**
+**دوگمەکان:**
+• پرۆمپت وەرگرن - پرۆمپتەکان ببینە
+• کەناڵەکەمان - بچۆ بۆ کەناڵەکەمان
+• یارمەتی - ئەم پەیامە پیشان بدە
+• زمان بگۆڕە - هەڵبژاردنی زمان بگۆڕە""",
+        'ar': """🤖 **استخدام البوت**
 
 **الأوامر:**
 • /start - بدء البوت
 • /leng - تغيير اللغة
 • /app - رابط المحفزات
-• /help - رسالة المساعدة هذه
+• /help - مساعدة
 
-**الميزات:**
-• دعم متعدد اللغات
-• اشتراك قناة إلزامي
-• نظام إعلانات المسؤول
-• إنشاء زر سريع"""
+**الأزرار:**
+• احصل على المحفزات - عرض المحفزات
+• قناتنا - انضم إلى قناتنا
+• مساعدة - عرض هذه الرسالة
+• تغيير اللغة - تغيير تفضيل اللغة"""
     }
     
-    keyboard = [[InlineKeyboardButton("◀️ Geri", callback_data="back_to_welcome")]]
+    keyboard = [[InlineKeyboardButton("◀️ Geri", callback_data="back")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     text = help_texts.get(user_lang, help_texts['en'])
     
-    if hasattr(update, 'callback_query') and update.callback_query:
-        await query.edit_message_text(
-            text,
-            reply_markup=reply_markup,
-            parse_mode=ParseMode.MARKDOWN
-        )
+    if update.callback_query:
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode=ParseMode.MARKDOWN)
     else:
         await context.bot.send_message(
             chat_id=user_id,
@@ -504,104 +273,69 @@ async def help_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.MARKDOWN
         )
 
-# 14) /leng KOMUTU
-async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Dil değiştirme komutu"""
-    user = update.effective_user
-    
-    # Kanal kontrolü
-    if not await check_subscription(user.id, context.bot):
-        await ask_for_subscription(update, context)
-        return
-    
-    await language_selection(update, context, is_change=True)
-
-# 15) DİL DEĞİŞTİRME MENÜSÜ
-async def change_lang_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Dil değiştirme menüsü"""
+# Geri butonu
+async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ana menüye dön"""
     query = update.callback_query
     await query.answer()
+    
+    user_id = query.from_user.id
+    user_lang = get_user_lang(user_id)
+    
+    await send_welcome(user_id, context.bot, user_lang)
+
+# Dil değiştirme
+async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Dil değiştir"""
+    user = update.effective_user
     
     keyboard = []
     for code, info in LANGUAGES.items():
         keyboard.append([InlineKeyboardButton(
             f"{info['flag']} {info['name']}",
-            callback_data=f"changelang_{code}"
+            callback_data=f"lang_{code}"
         )])
     
-    user_lang = get_user_lang(query.from_user.id)
+    user_lang = get_user_lang(user.id)
     messages = {
-        'tr': '🌍 **Yeni bir dil seçin:**',
-        'en': '🌍 **Choose a new language:**',
+        'tr': '🌍 **Yeni dil seçin:**',
+        'en': '🌍 **Choose new language:**',
         'ku': '🌍 **زمانێکی نوێ هەڵبژێرە:**',
         'ar': '🌍 **اختر لغة جديدة:**'
     }
     
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(
-        messages.get(user_lang, messages['en']),
-        reply_markup=reply_markup,
-        parse_mode=ParseMode.MARKDOWN
-    )
-
-# 16) DİL DEĞİŞTİRME CALLBACK
-async def change_language_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Dil değiştirme işlemi"""
-    query = update.callback_query
-    await query.answer()
     
-    lang_code = query.data.split('_')[1]
-    user_id = query.from_user.id
-    
-    conn = None
-    try:
-        conn = sqlite3.connect(DB_NAME, check_same_thread=False)
-        c = conn.cursor()
-        c.execute("UPDATE users SET lang=? WHERE user_id=?", (lang_code, user_id))
-        conn.commit()
-        
-        confirmation = {
-            'tr': '✅ Diliniz başarıyla değiştirildi!',
-            'en': '✅ Your language has been changed successfully!',
-            'ku': '✅ زمانەکەت بە سەرکەوتوویی گۆڕدرا!',
-            'ar': '✅ تم تغيير لغتك بنجاح!'
-        }
-        
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
         await query.edit_message_text(
-            f"{LANGUAGES[lang_code]['flag']} {confirmation.get(lang_code, '✅ Done!')}"
+            messages.get(user_lang, messages['en']),
+            reply_markup=reply_markup
         )
-        await send_welcome_menu(user_id, context.bot, lang_code)
-        
-    except Exception as e:
-        logger.error(f"Dil değiştirme hatası: {e}")
-        await query.edit_message_text("❌ Bir hata oluştu. Lütfen tekrar deneyin.")
-    finally:
-        if conn:
-            conn.close()
+    else:
+        await update.message.reply_text(
+            messages.get(user_lang, messages['en']),
+            reply_markup=reply_markup
+        )
 
-# 17) /app KOMUTU
+# /app komutu
 async def app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Prompt linkini göster"""
+    """Prompt linki"""
     user = update.effective_user
-    
-    # Kanal kontrolü
-    if not await check_subscription(user.id, context.bot):
-        await ask_for_subscription(update, context)
-        return
-    
     user_lang = get_user_lang(user.id)
     
     texts = {
-        'tr': "🚀 **Aşağıdaki butondan prompts sayfasına gidebilirsiniz:**",
-        'en': "🚀 **You can go to the prompts page from the button below:**",
-        'ku': "🚀 **دەتوانیت لە بڕگەی خوارەوە بچیتە سەر پەیجی پرۆمپتەکان:**",
-        'ar': "🚀 **يمكنك الانتقال إلى صفحة المحفزات من الزر أدناه:**"
+        'tr': "🚀 **Prompt almak için butona tıklayın:**",
+        'en': "🚀 **Click the button to get prompts:**",
+        'ku': "🚀 **کرتە لە دوگمەکە بکە بۆ وەرگرتنی پرۆمپت:**",
+        'ar': "🚀 **انقر فوق الزر للحصول على المحفزات:**"
     }
     
     button_texts = {
-        'tr': "🔥 Prompts Alma",
+        'tr': "🔥 Prompt Alma",
         'en': "🔥 Get Prompts",
-        'ku': "🔥 پرۆمپتەکان وەربگرن",
+        'ku': "🔥 پرۆمپت وەربگرن",
         'ar': "🔥 احصل على المحفزات"
     }
     
@@ -610,8 +344,6 @@ async def app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             button_texts.get(user_lang, button_texts['en']),
             url=PROMPT_LINK
         )
-    ], [
-        InlineKeyboardButton("🏠 Ana Menü", callback_data="back_to_welcome")
     ]]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -621,18 +353,12 @@ async def app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# 18) GERİ BUTONU
-async def back_to_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ana menüye dön"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = query.from_user.id
-    user_lang = get_user_lang(user_id)
-    
-    await send_welcome_menu(user_id, context.bot, user_lang)
+# /leng komutu
+async def leng_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Dil değiştirme komutu"""
+    await change_language(update, context)
 
-# 19) ADMIN KOMUTLARI
+# /admin komutu
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin paneli"""
     user = update.effective_user
@@ -641,378 +367,244 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     keyboard = [
-        [InlineKeyboardButton("📢 Duyuru Gönder", callback_data="start_broadcast")],
-        [InlineKeyboardButton("⚡ Hızlı Buton", callback_data="quick_button")],
-        [InlineKeyboardButton("📊 İstatistikler", callback_data="admin_stats")],
-        [InlineKeyboardButton("🧪 Test Mesajı", callback_data="admin_test")],
-        [InlineKeyboardButton("🚫 Kullanıcı Banla", callback_data="admin_ban_menu")],
-        [InlineKeyboardButton("✅ Kullanıcı Ban Kaldır", callback_data="admin_unban_menu")]
+        [InlineKeyboardButton("📢 Duyuru Gönder", callback_data="broadcast")],
+        [InlineKeyboardButton("⚡ Hızlı Buton", callback_data="quickbtn")],
+        [InlineKeyboardButton("📊 İstatistikler", callback_data="stats")],
+        [InlineKeyboardButton("🚫 Kullanıcı Banla", callback_data="ban")],
+        [InlineKeyboardButton("✅ Kullanıcı Ban Kaldır", callback_data="unban")]
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        "👑 **Admin Paneli**\n\nAşağıdaki seçeneklerden birini seçin:",
-        reply_markup=reply_markup,
-        parse_mode=ParseMode.MARKDOWN
+        "👑 **Admin Paneli**",
+        reply_markup=reply_markup
     )
 
-# 20) HIZLI BUTON SİSTEMİ - DÜZELTİLMİŞ
+# Hızlı buton
 async def quick_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Hızlı buton oluştur"""
     query = update.callback_query
     await query.answer()
     
     await query.edit_message_text(
-        "⚡ **Hızlı Buton Oluşturma**\n\n"
-        "**Format:**\n"
+        "⚡ **Hızlı Buton Oluştur**\n\n"
+        "Buton adı ve linkini şu şekilde gönderin:\n"
         "`Buton Adı https://link.com`\n\n"
-        "**Örnek:**\n"
-        "`Prompt Aç https://t.me/PrompttAI_bot`\n"
-        "`Kanalımız https://t.me/+wet-9MZuj044ZGQy`\n\n"
-        "Şimdi buton bilgilerini yazın:",
-        parse_mode=ParseMode.MARKDOWN
+        "Örnek:\n"
+        "`Promptlar https://t.me/PrompttAI_bot`"
     )
     
-    context.user_data['waiting_for_quick_button'] = True
+    context.user_data['waiting_button'] = True
 
-# 21) HIZLI BUTON MESAJI ALMA - DÜZELTİLMİŞ
-async def receive_quick_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Hızlı buton mesajı
+async def handle_button_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Hızlı buton mesajını işle"""
     user = update.effective_user
     if user.id != ADMIN_ID:
         return
     
-    if not context.user_data.get('waiting_for_quick_button'):
+    if not context.user_data.get('waiting_button'):
         return
     
     message = update.message.text.strip()
     
-    # URL'yi ayıkla
-    url_match = re.search(r'(https?://\S+)', message)
+    # Basit URL kontrolü
+    if 'http' in message:
+        parts = message.split('http')
+        if len(parts) >= 2:
+            button_name = parts[0].strip()
+            button_url = 'http' + parts[1].strip()
+            
+            # Tüm kullanıcıları al
+            try:
+                conn = sqlite3.connect(DB_NAME)
+                c = conn.cursor()
+                c.execute("SELECT user_id FROM users WHERE banned=0")
+                users = c.fetchall()
+                conn.close()
+                
+                # Buton oluştur
+                keyboard = [[InlineKeyboardButton(button_name, url=button_url)]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                success = 0
+                for user_row in users:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=user_row[0],
+                            text="🔗 **Yeni bağlantı!**",
+                            reply_markup=reply_markup
+                        )
+                        success += 1
+                        await asyncio.sleep(0.1)
+                    except:
+                        continue
+                
+                await update.message.reply_text(
+                    f"✅ Buton {success} kullanıcıya gönderildi!\n"
+                    f"Adı: {button_name}\n"
+                    f"URL: {button_url}"
+                )
+                
+            except Exception as e:
+                logger.error(f"Buton gönderme hatası: {e}")
+                await update.message.reply_text(f"❌ Hata: {e}")
+            
+            context.user_data.pop('waiting_button', None)
+            return
     
-    if url_match:
-        button_url = url_match.group(0)
-        button_name = message.replace(button_url, '').strip()
-        
-        if not button_name:
-            button_name = "Linke Git"
-        
-        # URL'yi doğrula
-        if not button_url.startswith(('http://', 'https://')):
-            button_url = 'https://' + button_url
-        
-        # Onay mesajı
-        keyboard = [
-            [
-                InlineKeyboardButton("✅ Evet, Gönder", 
-                    callback_data=f"send_quick_button:{button_name}:{button_url}"),
-                InlineKeyboardButton("❌ Hayır, İptal", 
-                    callback_data="cancel_quick_button")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(
-            f"⚡ **Buton Bilgileri:**\n\n"
-            f"**Buton Adı:** `{button_name}`\n"
-            f"**Buton Link:** `{button_url}`\n\n"
-            f"Bu buton tüm kullanıcılara gönderilecek.\n"
-            f"Onaylıyor musunuz?",
-            reply_markup=reply_markup,
-            parse_mode=ParseMode.MARKDOWN
-        )
-    else:
-        await update.message.reply_text(
-            "❌ Link bulunamadı! Lütfen formatı doğru yazın:\n\n"
-            "`Buton Adı https://link.com`\n\n"
-            "Örnek: `Prompt Aç https://t.me/PrompttAI_bot`",
-            parse_mode=ParseMode.MARKDOWN
-        )
+    await update.message.reply_text("❌ Geçersiz format! Örnek: `Promptlar https://t.me/link`")
 
-# 22) HIZLI BUTON GÖNDERME - DÜZELTİLMİŞ
-async def send_quick_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Hızlı butonu gönder"""
+# İstatistikler
+async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """İstatistikleri göster"""
     query = update.callback_query
     await query.answer()
     
     try:
-        data = query.data.split(":")
-        if len(data) != 3:
-            await query.edit_message_text("❌ Geçersiz buton verisi!")
-            return
-            
-        button_name = data[1]
-        button_url = data[2]
-        
-        await query.edit_message_text("⚡ Buton gönderiliyor...")
-        
-        # Tüm kullanıcıları al
-        conn = sqlite3.connect(DB_NAME, check_same_thread=False)
+        conn = sqlite3.connect(DB_NAME)
         c = conn.cursor()
-        c.execute("SELECT user_id, lang FROM users WHERE banned=0")
-        users = c.fetchall()
+        
+        c.execute("SELECT COUNT(*) FROM users")
+        total = c.fetchone()[0]
+        
+        c.execute("SELECT COUNT(*) FROM users WHERE banned=1")
+        banned = c.fetchone()[0]
+        
+        c.execute("SELECT lang, COUNT(*) FROM users GROUP BY lang")
+        langs = c.fetchall()
+        
         conn.close()
         
-        total_users = len(users)
-        success = 0
-        failed = 0
+        stats_text = f"📊 **İstatistikler**\n\n"
+        stats_text += f"• Toplam Kullanıcı: {total}\n"
+        stats_text += f"• Banlı Kullanıcı: {banned}\n\n"
+        stats_text += "**Dil Dağılımı:**\n"
         
-        # Her dil için mesaj
-        messages = {
-            'tr': f"🔗 **Yeni Bağlantı**\n\n`{button_name}` butonuna tıklayın:",
-            'en': f"🔗 **New Link**\n\nClick the `{button_name}` button:",
-            'ku': f"🔗 **بەستەری نوێ**\n\nکرتە لە دوگمەی `{button_name}` بکە:",
-            'ar': f"🔗 **رابط جديد**\n\nانقر فوق زر `{button_name}`:"
-        }
+        for lang, count in langs:
+            lang_name = LANGUAGES.get(lang, {}).get('name', lang)
+            stats_text += f"  {LANGUAGES.get(lang, {}).get('flag', '')} {lang_name}: {count}\n"
         
-        # Buton oluştur
-        keyboard = [[InlineKeyboardButton(button_name, url=button_url)]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        # Her kullanıcıya gönder
-        for i, (user_id, user_lang) in enumerate(users):
-            try:
-                message_text = messages.get(user_lang, messages['en'])
-                
-                await context.bot.send_message(
-                    chat_id=user_id,
-                    text=message_text,
-                    reply_markup=reply_markup,
-                    parse_mode=ParseMode.MARKDOWN
-                )
-                
-                success += 1
-                
-                if i % 10 == 0:
-                    await asyncio.sleep(0.3)
-                    
-            except Exception as e:
-                failed += 1
-                logger.error(f"Buton gönderilemedi {user_id}: {e}")
-        
-        result_text = (
-            f"✅ **BUTON GÖNDERİLDİ**\n\n"
-            f"📊 **İstatistikler:**\n"
-            f"• Toplam Kullanıcı: `{total_users}`\n"
-            f"• Başarılı: `{success}`\n"
-            f"• Başarısız: `{failed}`\n\n"
-            f"**Buton:** `{button_name}`\n"
-            f"**Link:** `{button_url}`"
-        )
-        
-        keyboard = [[InlineKeyboardButton("🏠 Ana Menü", callback_data="admin_main")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            result_text,
-            reply_markup=reply_markup,
-            parse_mode=ParseMode.MARKDOWN
-        )
+        await query.edit_message_text(stats_text, parse_mode=ParseMode.MARKDOWN)
         
     except Exception as e:
-        logger.error(f"Buton gönderme hatası: {e}")
-        await query.edit_message_text(f"❌ Hata: {e}")
-    finally:
-        context.user_data.pop('waiting_for_quick_button', None)
+        logger.error(f"İstatistik hatası: {e}")
+        await query.edit_message_text("❌ İstatistikler alınamadı")
 
-# 23) HIZLI BUTON İPTAL
-async def cancel_quick_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Hızlı butonu iptal et"""
-    query = update.callback_query
-    await query.answer("❌ Buton iptal edildi")
-    
-    context.user_data.pop('waiting_for_quick_button', None)
-    
-    await query.edit_message_text(
-        "❌ Buton iptal edildi.\n\n"
-        "Ana menüye dönmek için /admin yazın."
-    )
-
-# 24) DUYURU BAŞLATMA - DÜZELTİLMİŞ
-async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Duyuru oluşturmaya başla"""
+# Ban/Unban
+async def ban_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ban menüsü"""
     query = update.callback_query
     await query.answer()
-    
-    # Duyuru verilerini temizle
-    context.user_data['broadcast_data'] = {
-        'text': '',
-        'photo': None,
-        'video': None,
-        'button_text': '',
-        'button_url': '',
-        'step': 'text'
-    }
-    
-    await query.edit_message_text(
-        "📢 **Duyuru Oluşturma**\n\n"
-        "1️⃣ **Metin:** Duyuru metnini yazın\n"
-        "2️⃣ **Medya (İsteğe bağlı):** Resim veya video gönderin\n"
-        "3️⃣ **Buton (İsteğe bağlı):** Buton metni ve linki\n\n"
-        "**Şimdi duyuru metnini yazın:**\n"
-        "(İptal için /cancel)",
-        parse_mode=ParseMode.MARKDOWN
-    )
+    await query.edit_message_text("Banlamak için: `/ban user_id`\nÖrnek: `/ban 123456789`")
 
-# 25) DUYURU METNİ ALMA - DÜZELTİLMİŞ
-async def receive_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Duyuru metnini al"""
+async def unban_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Unban menüsü"""
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text("Ban kaldırmak için: `/unban user_id`\nÖrnek: `/unban 123456789`")
+
+# Broadcast
+async def broadcast_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Broadcast menüsü"""
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text(
+        "📢 **Duyuru Gönder**\n\n"
+        "Duyuru metnini gönderin. Tüm kullanıcılara iletilecektir.\n"
+        "İptal için: /cancel"
+    )
+    context.user_data['waiting_broadcast'] = True
+
+# Broadcast mesajı
+async def handle_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Broadcast mesajını işle"""
     user = update.effective_user
     if user.id != ADMIN_ID:
         return
     
-    if 'broadcast_data' not in context.user_data:
-        await update.message.reply_text("❌ Lütfen önce /admin yazıp duyuru başlatın.")
+    if not context.user_data.get('waiting_broadcast'):
         return
     
-    broadcast_data = context.user_data.get('broadcast_data', {})
+    message = update.message.text
     
-    if broadcast_data.get('step') != 'text':
-        await update.message.reply_text("❌ Yanlış adım. Lütfen önce duyuru metnini yazın.")
-        return
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute("SELECT user_id FROM users WHERE banned=0")
+        users = c.fetchall()
+        conn.close()
+        
+        success = 0
+        for user_row in users:
+            try:
+                await context.bot.send_message(
+                    chat_id=user_row[0],
+                    text=message,
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                success += 1
+                await asyncio.sleep(0.1)
+            except:
+                continue
+        
+        await update.message.reply_text(f"✅ Duyuru {success} kullanıcıya gönderildi!")
+        
+    except Exception as e:
+        logger.error(f"Broadcast hatası: {e}")
+        await update.message.reply_text(f"❌ Hata: {e}")
     
-    # Metni güvenli hale getir (markdown escape)
-    text = update.message.text
-    # Basit markdown escape
-    text = text.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
-    
-    broadcast_data['text'] = text
-    broadcast_data['step'] = 'media'
-    
-    keyboard = [
-        [InlineKeyboardButton("🖼️ Resim Ekle", callback_data="add_photo")],
-        [InlineKeyboardButton("📹 Video Ekle", callback_data="add_video")],
-        [InlineKeyboardButton("🔘 Buton Ekle", callback_data="add_button")],
-        [InlineKeyboardButton("📤 Hemen Gönder", callback_data="send_now")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.message.reply_text(
-        f"✅ **Metin kaydedildi!**\n\n"
-        f"**Ne yapmak istiyorsunuz?**",
-        reply_markup=reply_markup,
-        parse_mode=ParseMode.MARKDOWN
-    )
+    context.user_data.pop('waiting_broadcast', None)
 
-# 26) DUYURU ÖNİZLEME GÖSTER - DÜZELTİLMİŞ
-async def show_broadcast_preview(update: Update, context: ContextTypes.DEFAULT_TYPE, message=""):
-    """Duyuru önizlemesini göster"""
-    if 'broadcast_data' not in context.user_data:
-        if hasattr(update, 'message'):
-            await update.message.reply_text("❌ Duyuru verisi bulunamadı.")
+# /cancel komutu
+async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """İşlem iptal"""
+    user = update.effective_user
+    if user.id != ADMIN_ID:
         return
     
-    broadcast_data = context.user_data.get('broadcast_data', {})
+    context.user_data.pop('waiting_button', None)
+    context.user_data.pop('waiting_broadcast', None)
     
-    preview_text = "📢 **DUYURU ÖNİZLEME**\n\n"
-    
-    if broadcast_data.get('photo'):
-        preview_text += "🖼️ **Resim:** ✓ Var\n"
-    elif broadcast_data.get('video'):
-        preview_text += "📹 **Video:** ✓ Var\n"
-    else:
-        preview_text += "📝 **Medya:** Yok\n"
-    
-    if broadcast_data.get('button_text') and broadcast_data.get('button_url'):
-        preview_text += f"🔘 **Buton:** {broadcast_data['button_text']}\n"
-        preview_text += f"🔗 **Link:** {broadcast_data['button_url']}\n"
-    else:
-        preview_text += "🔘 **Buton:** Yok\n"
-    
-    preview_text += f"\n**Metin:**\n{broadcast_data.get('text', '')}\n"
-    
-    keyboard = []
-    
-    media_buttons = []
-    if not broadcast_data.get('photo') and not broadcast_data.get('video'):
-        media_buttons.append(InlineKeyboardButton("🖼️ Resim Ekle", callback_data="add_photo"))
-        media_buttons.append(InlineKeyboardButton("📹 Video Ekle", callback_data="add_video"))
-    
-    if not broadcast_data.get('button_text'):
-        media_buttons.append(InlineKeyboardButton("🔘 Buton Ekle", callback_data="add_button"))
-    else:
-        media_buttons.append(InlineKeyboardButton("✏️ Butonu Düzenle", callback_data="add_button"))
-    
-    if media_buttons:
-        keyboard.append(media_buttons)
-    
-    keyboard.append([
-        InlineKeyboardButton("📤 Gönder", callback_data="confirm_send_broadcast"),
-        InlineKeyboardButton("✏️ Metni Düzenle", callback_data="edit_broadcast"),
-        InlineKeyboardButton("❌ İptal", callback_data="cancel_broadcast_final")
-    ])
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    if hasattr(update, 'message'):
-        await update.message.reply_text(
-            f"{message}\n\n{preview_text}" if message else preview_text,
-            reply_markup=reply_markup,
-            parse_mode=ParseMode.MARKDOWN
+    await update.message.reply_text("❌ İşlem iptal edildi.")
+
+# Hata handler
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Hataları yakala"""
+    logger.error(f"Hata: {context.error}")
+    try:
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"Bot hatası:\n{context.error}"
         )
-    elif hasattr(update, 'callback_query'):
-        query = update.callback_query
-        try:
-            await query.edit_message_text(
-                f"{message}\n\n{preview_text}" if message else preview_text,
-                reply_markup=reply_markup,
-                parse_mode=ParseMode.MARKDOWN
-            )
-        except:
-            await context.bot.send_message(
-                chat_id=query.from_user.id,
-                text=f"{message}\n\n{preview_text}" if message else preview_text,
-                reply_markup=reply_markup,
-                parse_mode=ParseMode.MARKDOWN
-            )
+    except:
+        pass
 
-# Geri kalan fonksiyonlar aynı kalacak, sadece error handling eklenecek...
-
-# 49) ANA UYGULAMA - GÜNCELLENMİŞ
+# Ana fonksiyon
 def main():
-    """Ana uygulamayı başlat"""
+    """Botu başlat"""
     try:
         # Application oluştur
         application = Application.builder().token(BOT_TOKEN).build()
         
-        # Komut handler'ları
+        # Komutlar
         application.add_handler(CommandHandler("start", start))
-        application.add_handler(CommandHandler("leng", change_language))
+        application.add_handler(CommandHandler("leng", leng_command))
         application.add_handler(CommandHandler("app", app_command))
+        application.add_handler(CommandHandler("help", help_command))
         application.add_handler(CommandHandler("admin", admin_command))
-        application.add_handler(CommandHandler("stats", stats_command))
-        application.add_handler(CommandHandler("ban", ban_command))
-        application.add_handler(CommandHandler("unban", unban_command))
-        application.add_handler(CommandHandler("test", test_command))
-        application.add_handler(CommandHandler("help", help_menu))
         application.add_handler(CommandHandler("cancel", cancel_command))
         
-        # Callback query handler'ları
-        application.add_handler(CallbackQueryHandler(set_language, pattern="^setlang_"))
-        application.add_handler(CallbackQueryHandler(change_language_callback, pattern="^changelang_"))
-        application.add_handler(CallbackQueryHandler(check_subscription_callback, pattern="^check_subscription$"))
-        application.add_handler(CallbackQueryHandler(help_menu, pattern="^help_menu$"))
-        application.add_handler(CallbackQueryHandler(back_to_welcome, pattern="^back_to_welcome$"))
-        application.add_handler(CallbackQueryHandler(change_lang_menu, pattern="^change_lang_menu$"))
-        
-        # Admin callback handler'ları
-        application.add_handler(CallbackQueryHandler(start_broadcast, pattern="^start_broadcast$"))
-        application.add_handler(CallbackQueryHandler(quick_button, pattern="^quick_button$"))
-        application.add_handler(CallbackQueryHandler(add_photo, pattern="^add_photo$"))
-        application.add_handler(CallbackQueryHandler(add_video, pattern="^add_video$"))
-        application.add_handler(CallbackQueryHandler(add_button, pattern="^add_button$"))
-        application.add_handler(CallbackQueryHandler(send_now, pattern="^send_now$"))
-        application.add_handler(CallbackQueryHandler(confirm_send_broadcast, pattern="^confirm_send_broadcast$"))
-        application.add_handler(CallbackQueryHandler(execute_broadcast, pattern="^execute_broadcast$"))
-        application.add_handler(CallbackQueryHandler(send_quick_button, pattern=r"^send_quick_button:"))
-        application.add_handler(CallbackQueryHandler(cancel_quick_button, pattern="^cancel_quick_button$"))
-        application.add_handler(CallbackQueryHandler(edit_broadcast, pattern="^edit_broadcast$"))
-        application.add_handler(CallbackQueryHandler(cancel_broadcast_final, pattern="^cancel_broadcast_final$"))
-        application.add_handler(CallbackQueryHandler(admin_stats, pattern="^admin_stats$"))
-        application.add_handler(CallbackQueryHandler(admin_test, pattern="^admin_test$"))
-        application.add_handler(CallbackQueryHandler(admin_ban_menu, pattern="^admin_ban_menu$"))
-        application.add_handler(CallbackQueryHandler(admin_unban_menu, pattern="^admin_unban_menu$"))
-        application.add_handler(CallbackQueryHandler(admin_main, pattern="^admin_main$"))
+        # Callback'ler
+        application.add_handler(CallbackQueryHandler(language_selected, pattern="^lang_"))
+        application.add_handler(CallbackQueryHandler(help_command, pattern="^help$"))
+        application.add_handler(CallbackQueryHandler(back_to_menu, pattern="^back$"))
+        application.add_handler(CallbackQueryHandler(change_language, pattern="^change_lang$"))
+        application.add_handler(CallbackQueryHandler(quick_button, pattern="^quickbtn$"))
+        application.add_handler(CallbackQueryHandler(show_stats, pattern="^stats$"))
+        application.add_handler(CallbackQueryHandler(ban_menu, pattern="^ban$"))
+        application.add_handler(CallbackQueryHandler(unban_menu, pattern="^unban$"))
+        application.add_handler(CallbackQueryHandler(broadcast_menu, pattern="^broadcast$"))
         
         # Mesaj handler'ları
         application.add_handler(MessageHandler(
@@ -1020,33 +612,18 @@ def main():
             handle_admin_messages
         ))
         
-        application.add_handler(MessageHandler(
-            (filters.PHOTO | filters.VIDEO) & filters.User(ADMIN_ID),
-            receive_media
-        ))
-        
         # Hata handler
         application.add_error_handler(error_handler)
         
-        # Botu başlat - FIX: drop_pending_updates=True ile
+        # Botu başlat
         logger.info("Bot başlatılıyor...")
         application.run_polling(
-            allowed_updates=Update.ALL_TYPES,
-            drop_pending_updates=True,  # Önemli: Bekleyen güncellemeleri temizle
-            close_loop=False
+            drop_pending_updates=True,
+            allowed_updates=Update.ALL_TYPES
         )
         
     except Exception as e:
         logger.error(f"Bot başlatma hatası: {e}")
-        sys.exit(1)
 
 if __name__ == '__main__':
-    # Railway için özel ayarlar
-    logger.info("=" * 50)
-    logger.info("Telegram Bot Başlatılıyor")
-    logger.info(f"Token var: {'Evet' if BOT_TOKEN else 'Hayır'}")
-    logger.info(f"Admin ID: {ADMIN_ID}")
-    logger.info(f"Channel ID: {CHANNEL_ID}")
-    logger.info("=" * 50)
-    
     main()
