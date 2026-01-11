@@ -457,3 +457,27 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# ... mevcut bot.py kodu devam ediyor ...
+
+# ========== OTOMATİK KOMUT YÜKLEYİCİ ==========
+# Bu kısım son satırlara eklenmeli, application.run_polling()'den önce
+
+print("🔧 Loading additional commands...")
+
+# Otomatik olarak commands.py'den komutları yükle
+try:
+    import commands
+    if hasattr(commands, 'setup_commands'):
+        commands.setup_commands(application)
+        print("✅ Additional commands loaded successfully!")
+    else:
+        print("⚠️ No setup_commands function found in commands.py")
+except ImportError:
+    print("ℹ️ No additional commands module found")
+except Exception as e:
+    print(f"⚠️ Error loading additional commands: {e}")
+
+# Botu başlat
+print("🤖 Bot başlatılıyor...")
+application.run_polling(allowed_updates=Update.ALL_TYPES)
