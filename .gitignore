@@ -1,7 +1,0 @@
-.env
-*.pyc
-__pycache__/
-venv/
-bot.db
-*.log
-secrets.txt
