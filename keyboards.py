@@ -30,9 +30,25 @@ def subscribe_keyboard(lang_code="en"):
         ],
         [
             InlineKeyboardButton(
-                "✅ Kontrol Et / Check", 
-                callback_data="check_subscription"
+                get_text(lang_code, "check_again"), 
+                callback_data="check_sub"
             )
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def main_menu_keyboard(lang_code="en"):
+    """Ana menü butonları"""
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                get_text(lang_code, "select_language"),
+                callback_data="change_lang"
+            )
+        ],
+        [
+            InlineKeyboardButton("📖 Yardım", callback_data="show_help"),
+            InlineKeyboardButton("🏠 Ana Menü", callback_data="main_menu"),
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
