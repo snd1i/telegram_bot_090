@@ -8,7 +8,8 @@ CHANNEL_LINK = "https://t.me/+wet-9MZuj044ZGQy"
 CHANNEL_ID = -1002072605977
 
 # Admin ID'leri (Telegram kullanıcı ID'nizi buraya ekleyin)
-ADMIN_IDS = [5541236874]  # KENDİ TELEGRAM ID'NİZİ BURAYA YAZIN
+# Telegram ID'nizi @userinfobot'tan alabilirsiniz
+ADMIN_IDS = [5541236874]  # BURAYA KENDİ ID'NİZİ YAZIN
 
 # Varsayılan dil
 DEFAULT_LANGUAGE = "en"
