@@ -4,7 +4,6 @@ from telegram.constants import ChatMemberStatus
 import json
 import os
 import time
-import asyncio
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Thread
 
@@ -88,8 +87,8 @@ LANGUAGES = {
         'choose_lang': '👋 تکایە زمانێک هەڵبژێرە:',
         'lang_selected': '✅ زمانی تۆ دیاری کرا!',
         'help_text': 'یارمەتی: ئەم بۆتە پرۆمپتەکانت پێدەدات...',
-        'not_subscribed': '⚠️ پێویستە سەبسکرایبی کەناڵەکەمان بیت بۆ بەکارهێنانی بۆتەکە!\n\n📢 تکایە یەکەم جار بچۆرە ناو کەناڵەکە:',
-        'subscribe_button': 'چوونە ناو کەناڵەکە ↗️',
+        'not_subscribed': '⚠️ پێویستە سەبسکرایبی کەناڵەکەمان بیت بۆ بەکارهێنانی بۆتەکە!',
+        'subscribe_button': 'چوونە ناو کەناڵەکە',
         'already_subscribed': '✅ سوپاس! ئێستا دەتوانیت بۆتەکە بەکاربهێنیت.',
         'now_subscribed': '🎉 سوپاس بۆ چوونە ناو کەناڵەکە! ئێستا دەتوانیت بۆتەکە بەکاربهێنیت.',
         'admin_only': '❌ تەنیا بەڕێوەبەر دەتوانێت ئەم فرمانە بەکاربهێنێت!'
@@ -103,8 +102,8 @@ LANGUAGES = {
         'choose_lang': '👋 Please choose a language:',
         'lang_selected': '✅ Your language has been set!',
         'help_text': 'Help: This bot provides you with prompts...',
-        'not_subscribed': '⚠️ You must subscribe to our channel to use the bot!\n\n📢 First, please join our channel:',
-        'subscribe_button': 'Join Channel ↗️',
+        'not_subscribed': '⚠️ You must subscribe to our channel to use the bot!',
+        'subscribe_button': 'Join Channel',
         'already_subscribed': '✅ Thank you! You can now use the bot.',
         'now_subscribed': '🎉 Thank you for joining the channel! You can now use the bot.',
         'admin_only': '❌ Only admin can use this command!'
@@ -118,8 +117,8 @@ LANGUAGES = {
         'choose_lang': '👋 الرجاء اختيار لغة:',
         'lang_selected': '✅ تم تحديد لغتك!',
         'help_text': 'مساعدة: هذا البوت يزودك بالنصوص...',
-        'not_subscribed': '⚠️ يجب عليك الاشتراك في قناتنا لاستخدام البوت!\n\n📢 أولاً، يرجى الانضمام إلى قناتنا:',
-        'subscribe_button': 'انضم إلى القناة ↗️',
+        'not_subscribed': '⚠️ يجب عليك الاشتراك في قناتنا لاستخدام البوت!',
+        'subscribe_button': 'انضم إلى القناة',
         'already_subscribed': '✅ شكراً! يمكنك الآن استخدام البوت.',
         'now_subscribed': '🎉 شكراً للانضمام إلى القناة! يمكنك الآن استخدام البوت.',
         'admin_only': '❌ فقط المدير يمكنه استخدام هذا الأمر!'
@@ -422,6 +421,41 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lang_data = LANGUAGES.get(user_lang, LANGUAGES['en'])
         await query.message.reply_text(lang_data['help_text'])
 
+# ========== EKLENTİ YÜKLEYİCİ ==========
+def load_extensions(application):
+    """Extensions klasöründeki komutları yükler"""
+    print("🔄 Loading extensions...")
+    
+    try:
+        import os
+        
+        # extensions klasörü var mı kontrol et
+        if os.path.exists("extensions"):
+            print("📁 Found extensions folder")
+            
+            # basic.py'yi yükle
+            basic_path = os.path.join("extensions", "basic.py")
+            if os.path.exists(basic_path):
+                try:
+                    from extensions import basic
+                    if hasattr(basic, "setup"):
+                        basic.setup(application)
+                        print("✅ Loaded: basic.py")
+                    else:
+                        print("⚠️ basic.py has no setup() function")
+                except Exception as e:
+                    print(f"❌ Error loading basic.py: {e}")
+            else:
+                print("ℹ️ basic.py not found in extensions/")
+                
+        else:
+            print("ℹ️ No extensions folder found")
+            
+    except Exception as e:
+        print(f"⚠️ Extension loader error: {e}")
+    
+    print("✅ Extension loading completed!")
+
 # ========== BOT BAŞLATMA ==========
 def main():
     """Botu başlat"""
@@ -440,10 +474,13 @@ def main():
     # Bot uygulamasını oluştur
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # Komut işleyicileri
+    # ANA komut işleyicileri
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('join', join_command))
     application.add_handler(CallbackQueryHandler(button_callback))
+    
+    # EKLENTİLERİ YÜKLE
+    load_extensions(application)
     
     # Botu başlat
     print("🤖 Bot başlatılıyor...")
@@ -457,38 +494,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-# ... mevcut bot.py kodu devam ediyor ...
-
-# ========== OTOMATİK KOMUT YÜKLEYİCİ ==========
-# Bu kısım son satırlara eklenmeli, application.run_polling()'den önce
-
-print("🔧 Loading additional commands...")
-
-# Otomatik olarak commands.py'den komutları yükle
-try:
-    import commands
-    if hasattr(commands, 'setup_commands'):
-        commands.setup_commands(application)
-        print("✅ Additional commands loaded successfully!")
-    else:
-        print("⚠️ No setup_commands function found in commands.py")
-except ImportError:
-    print("ℹ️ No additional commands module found")
-except Exception as e:
-    print(f"⚠️ Error loading additional commands: {e}")
-
-# ========== OTOMATİK EKLENTİ YÜKLEYİCİ ==========
-print("🔌 Loading extensions...")
-try:
-    import loader
-    loader.load_extensions(application)
-    print("✅ Extensions loaded!")
-except ImportError:
-    print("ℹ️ No loader found")
-except Exception as e:
-    print(f"⚠️ Error loading extensions: {e}")
-
-# Botu başlat (BU SATIR ZATEN VAR)
-print("🤖 Bot başlatılıyor...")
-application.run_polling(allowed_updates=Update.ALL_TYPES)
