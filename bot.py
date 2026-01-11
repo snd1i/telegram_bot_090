@@ -1,5 +1,5 @@
 import logging
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters
 
 from config import TOKEN
 from handlers import (
@@ -9,7 +9,7 @@ from handlers import (
     button_handler,
     error_handler
 )
-from admin import admin_command  # Admin komutu import
+from admin import admin_command, cancel_command, handle_admin_messages
 
 # Log ayarları
 logging.basicConfig(
@@ -29,26 +29,40 @@ def main():
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
     
-    # Handler'ları ekle
+    # ========== KOMUT HANDLER'LARI ==========
     dp.add_handler(CommandHandler("start", start_command))
     dp.add_handler(CommandHandler("help", help_command))
     dp.add_handler(CommandHandler("language", language_command))
     dp.add_handler(CommandHandler("lang", language_command))
-    dp.add_handler(CommandHandler("admin", admin_command))  # Admin komutu
+    dp.add_handler(CommandHandler("admin", admin_command))
+    dp.add_handler(CommandHandler("cancel", cancel_command))  # CANCEL KOMUTU
     
-    # Buton handler'ını ekle
+    # ========== CALLBACK HANDLER ==========
     dp.add_handler(CallbackQueryHandler(button_handler))
     
-    # Hata handler'ını ekle
+    # ========== ADMIN MESAJ HANDLER ==========
+    # Admin duyuru mesajlarını yakala
+    dp.add_handler(MessageHandler(
+        Filters.text & ~Filters.command, 
+        handle_admin_messages
+    ))
+    
+    # Admin fotoğraf/video mesajlarını da yakala
+    dp.add_handler(MessageHandler(
+        Filters.photo | Filters.video | Filters.document,
+        handle_admin_messages
+    ))
+    
+    # ========== HATA HANDLER ==========
     dp.add_error_handler(error_handler)
     
-    # Botu başlat
+    # ========== BOTU BAŞLAT ==========
     print("=" * 50)
     print("🤖 MultiLanguage Bot Başlatılıyor...")
-    print("📁 Modüler yapı aktif")
-    print("🔧 Admin paneli aktif")
-    print("🌍 5 dil destekli")
-    print("📊 JSON veritabanı aktif")
+    print("✅ Tüm sistemler aktif")
+    print("📢 Duyuru sistemi: ÇALIŞIYOR")
+    print("❌ /cancel komutu: AKTİF")
+    print("🔧 Admin paneli: HAZIR")
     print("=" * 50)
     
     updater.start_polling()
