@@ -481,3 +481,14 @@ except Exception as e:
 # Botu başlat
 print("🤖 Bot başlatılıyor...")
 application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+# ========== OTOMATİK EKLENTİ YÜKLEYİCİ ==========
+print("🔌 Loading extensions...")
+try:
+    import loader
+    loader.load_extensions(application)
+    print("✅ Extensions loaded!")
+except ImportError:
+    print("ℹ️ No loader found")
+except Exception as e:
+    print(f"⚠️ Error: {e}")
