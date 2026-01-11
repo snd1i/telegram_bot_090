@@ -13,3 +13,6 @@ DEFAULT_LANGUAGE = "en"
 # Bot bilgileri
 BOT_NAME = "MultiLanguage Bot"
 BOT_VERSION = "1.0"
+
+# Dosya yolları
+DB_FILE = "users.json"
