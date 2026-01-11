@@ -504,7 +504,7 @@ async def back_to_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_welcome_menu(user_id, context.bot, user_lang)
 
 # ============================
-# DUYURU SİSTEMİ (YENİ)
+# DUYURU SİSTEMİ (DÜZELTİLMİŞ)
 # ============================
 
 # 18) ADMIN KOMUTLARI
@@ -560,34 +560,45 @@ async def receive_broadcast_text(update: Update, context: ContextTypes.DEFAULT_T
     if user.id != ADMIN_ID:
         return
     
+    if 'broadcast_data' not in context.user_data:
+        await update.message.reply_text("❌ Duyuru verisi bulunamadı. Lütfen /admin ile yeniden başlayın.")
+        return
+    
     broadcast_data = context.user_data.get('broadcast_data', {})
     
-    if broadcast_data.get('step') == 'text':
-        broadcast_data['text'] = update.message.text
-        broadcast_data['step'] = 'media'
-        
-        keyboard = [
-            [InlineKeyboardButton("🖼️ Resim Ekle", callback_data="add_photo")],
-            [InlineKeyboardButton("📹 Video Ekle", callback_data="add_video")],
-            [InlineKeyboardButton("🔘 Buton Ekle", callback_data="add_button")],
-            [InlineKeyboardButton("📤 Hemen Gönder", callback_data="send_now")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(
-            f"✅ **Metin kaydedildi:**\n\n{update.message.text}\n\n"
-            f"**Ne yapmak istiyorsunuz?**\n"
-            f"• Resim/Video ekleyebilirsiniz\n"
-            f"• Buton ekleyebilirsiniz\n"
-            f"• Direkt gönderebilirsiniz",
-            reply_markup=reply_markup,
-            parse_mode=ParseMode.MARKDOWN
-        )
+    if broadcast_data.get('step') != 'text':
+        await update.message.reply_text("❌ Yanlış adım. Lütfen önce duyuru metnini yazın.")
+        return
+    
+    broadcast_data['text'] = update.message.text
+    broadcast_data['step'] = 'media'
+    
+    keyboard = [
+        [InlineKeyboardButton("🖼️ Resim Ekle", callback_data="add_photo")],
+        [InlineKeyboardButton("📹 Video Ekle", callback_data="add_video")],
+        [InlineKeyboardButton("🔘 Buton Ekle", callback_data="add_button")],
+        [InlineKeyboardButton("📤 Hemen Gönder", callback_data="send_now")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        f"✅ **Metin kaydedildi:**\n\n{update.message.text}\n\n"
+        f"**Ne yapmak istiyorsunuz?**\n"
+        f"• Resim/Video ekleyebilirsiniz\n"
+        f"• Buton ekleyebilirsiniz\n"
+        f"• Direkt gönderebilirsiniz",
+        reply_markup=reply_markup,
+        parse_mode=ParseMode.MARKDOWN
+    )
 
 # 21) RESİM EKLEME
 async def add_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    
+    if 'broadcast_data' not in context.user_data:
+        await query.edit_message_text("❌ Duyuru verisi bulunamadı. Lütfen /admin ile yeniden başlayın.")
+        return
     
     context.user_data['broadcast_data']['step'] = 'waiting_photo'
     
@@ -603,6 +614,10 @@ async def add_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
+    if 'broadcast_data' not in context.user_data:
+        await query.edit_message_text("❌ Duyuru verisi bulunamadı. Lütfen /admin ile yeniden başlayın.")
+        return
+    
     context.user_data['broadcast_data']['step'] = 'waiting_video'
     
     await query.edit_message_text(
@@ -616,6 +631,10 @@ async def add_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def receive_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
+        return
+    
+    if 'broadcast_data' not in context.user_data:
+        await update.message.reply_text("❌ Duyuru verisi bulunamadı. Lütfen /admin ile yeniden başlayın.")
         return
     
     broadcast_data = context.user_data.get('broadcast_data', {})
@@ -642,6 +661,10 @@ async def add_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
+    if 'broadcast_data' not in context.user_data:
+        await query.edit_message_text("❌ Duyuru verisi bulunamadı. Lütfen /admin ile yeniden başlayın.")
+        return
+    
     context.user_data['broadcast_data']['step'] = 'button_text'
     
     await query.edit_message_text(
@@ -652,25 +675,20 @@ async def add_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# BUTON METNİ ALMA FONKSİYONU - DÜZELTİLMİŞ VERSİYON
+# 25) BUTON METNİ ALMA - DÜZELTİLDİ
 async def receive_button_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
         return
     
-    # HATA DÜZELTMESİ: broadcast_data kontrolü ekleyin
     if 'broadcast_data' not in context.user_data:
         await update.message.reply_text("❌ Duyuru verisi bulunamadı. Lütfen /admin ile yeniden başlayın.")
         return
     
     broadcast_data = context.user_data.get('broadcast_data', {})
     
-    # HATA DÜZELTMESİ: step kontrolü düzeltildi
     if broadcast_data.get('step') != 'button_text':
-        # Eğer yanlış adımda ise, kullanıcıyı yönlendir
-        await update.message.reply_text(
-            "❌ Yanlış adım. Lütfen buton eklemek için '🔘 Buton Ekle' butonuna tıklayın."
-        )
+        await update.message.reply_text("❌ Yanlış adım. Lütfen buton eklemek için '🔘 Buton Ekle' butonuna tıklayın.")
         return
     
     broadcast_data['button_text'] = update.message.text
@@ -684,35 +702,29 @@ async def receive_button_text(update: Update, context: ContextTypes.DEFAULT_TYPE
         parse_mode=ParseMode.MARKDOWN
     )
 
-# BUTON LİNKİ ALMA FONKSİYONU - DÜZELTİLMİŞ VERSİYON
+# 26) BUTON LİNKİ ALMA - DÜZELTİLDİ
 async def receive_button_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
         return
     
-    # HATA DÜZELTMESİ: broadcast_data kontrolü ekleyin
     if 'broadcast_data' not in context.user_data:
         await update.message.reply_text("❌ Duyuru verisi bulunamadı. Lütfen /admin ile yeniden başlayın.")
         return
     
     broadcast_data = context.user_data.get('broadcast_data', {})
     
-    # HATA DÜZELTMESİ: step kontrolü düzeltildi
     if broadcast_data.get('step') != 'button_url':
-        await update.message.reply_text(
-            "❌ Yanlış adım. Lütfen önce buton metnini yazın."
-        )
+        await update.message.reply_text("❌ Yanlış adım. Lütfen önce buton metnini yazın.")
         return
     
     broadcast_data['button_url'] = update.message.text
     broadcast_data['step'] = 'button_done'
     
-    # Önizlemeyi göster
     await show_broadcast_preview(update, context, "✅ Buton eklendi!")
 
-# DUYURU ÖNİZLEME FONKSİYONU - HATA DÜZELTMESİ
+# 27) DUYURU ÖNİZLEME GÖSTER - DÜZELTİLDİ
 async def show_broadcast_preview(update: Update, context: ContextTypes.DEFAULT_TYPE, message=""):
-    # HATA DÜZELTMESİ: broadcast_data kontrolü
     if 'broadcast_data' not in context.user_data:
         if hasattr(update, 'message'):
             await update.message.reply_text("❌ Duyuru verisi bulunamadı.")
@@ -722,7 +734,6 @@ async def show_broadcast_preview(update: Update, context: ContextTypes.DEFAULT_T
     
     preview_text = "📢 **DUYURU ÖNİZLEME**\n\n"
     
-    # Medya bilgisi
     if broadcast_data.get('photo'):
         preview_text += "🖼️ **Resim:** ✓ Var\n"
     elif broadcast_data.get('video'):
@@ -730,7 +741,6 @@ async def show_broadcast_preview(update: Update, context: ContextTypes.DEFAULT_T
     else:
         preview_text += "📝 **Medya:** Yok\n"
     
-    # Buton bilgisi
     if broadcast_data.get('button_text') and broadcast_data.get('button_url'):
         preview_text += f"🔘 **Buton:** {broadcast_data['button_text']}\n"
         preview_text += f"🔗 **Link:** {broadcast_data['button_url']}\n"
@@ -739,23 +749,19 @@ async def show_broadcast_preview(update: Update, context: ContextTypes.DEFAULT_T
     
     preview_text += f"\n**Metin:**\n{broadcast_data.get('text', '')}\n"
     
-    # Butonlar
     keyboard = []
     
-    # Medya butonları
     media_buttons = []
     if not broadcast_data.get('photo') and not broadcast_data.get('video'):
         media_buttons.append(InlineKeyboardButton("🖼️ Resim Ekle", callback_data="add_photo"))
         media_buttons.append(InlineKeyboardButton("📹 Video Ekle", callback_data="add_video"))
     
-    # Buton ekleme
     if not broadcast_data.get('button_text'):
         media_buttons.append(InlineKeyboardButton("🔘 Buton Ekle", callback_data="add_button"))
     
     if media_buttons:
         keyboard.append(media_buttons)
     
-    # Ana butonlar
     keyboard.append([
         InlineKeyboardButton("📤 Gönder", callback_data="confirm_send_broadcast"),
         InlineKeyboardButton("✏️ Düzenle", callback_data="edit_broadcast"),
@@ -784,65 +790,7 @@ async def show_broadcast_preview(update: Update, context: ContextTypes.DEFAULT_T
                 text=f"{message}\n\n{preview_text}" if message else preview_text,
                 reply_markup=reply_markup,
                 parse_mode=ParseMode.MARKDOWN
-            )    broadcast_data = context.user_data.get('broadcast_data', {})
-    
-    preview_text = "📢 **DUYURU ÖNİZLEME**\n\n"
-    
-    # Medya bilgisi
-    if broadcast_data.get('photo'):
-        preview_text += "🖼️ **Resim:** ✓ Var\n"
-    elif broadcast_data.get('video'):
-        preview_text += "📹 **Video:** ✓ Var\n"
-    else:
-        preview_text += "📝 **Medya:** Yok\n"
-    
-    # Buton bilgisi
-    if broadcast_data.get('button_text') and broadcast_data.get('button_url'):
-        preview_text += f"🔘 **Buton:** {broadcast_data['button_text']}\n"
-        preview_text += f"🔗 **Link:** {broadcast_data['button_url']}\n"
-    else:
-        preview_text += "🔘 **Buton:** Yok\n"
-    
-    preview_text += f"\n**Metin:**\n{broadcast_data.get('text', '')}\n"
-    
-    # Butonlar
-    keyboard = []
-    
-    # Medya butonları
-    media_buttons = []
-    if not broadcast_data.get('photo') and not broadcast_data.get('video'):
-        media_buttons.append(InlineKeyboardButton("🖼️ Resim Ekle", callback_data="add_photo"))
-        media_buttons.append(InlineKeyboardButton("📹 Video Ekle", callback_data="add_video"))
-    
-    # Buton ekleme
-    if not broadcast_data.get('button_text'):
-        media_buttons.append(InlineKeyboardButton("🔘 Buton Ekle", callback_data="add_button"))
-    
-    if media_buttons:
-        keyboard.append(media_buttons)
-    
-    # Ana butonlar
-    keyboard.append([
-        InlineKeyboardButton("📤 Gönder", callback_data="confirm_send_broadcast"),
-        InlineKeyboardButton("✏️ Düzenle", callback_data="edit_broadcast"),
-        InlineKeyboardButton("❌ İptal", callback_data="cancel_broadcast_final")
-    ])
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    if hasattr(update, 'message'):
-        await update.message.reply_text(
-            f"{message}\n\n{preview_text}" if message else preview_text,
-            reply_markup=reply_markup,
-            parse_mode=ParseMode.MARKDOWN
-        )
-    elif hasattr(update, 'callback_query'):
-        query = update.callback_query
-        await query.edit_message_text(
-            f"{message}\n\n{preview_text}" if message else preview_text,
-            reply_markup=reply_markup,
-            parse_mode=ParseMode.MARKDOWN
-        )
+            )
 
 # 28) SEND_NOW (Direkt gönder)
 async def send_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -856,13 +804,16 @@ async def confirm_send_broadcast(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     await query.answer()
     
+    if 'broadcast_data' not in context.user_data:
+        await query.edit_message_text("❌ Duyuru verisi bulunamadı!")
+        return
+    
     broadcast_data = context.user_data.get('broadcast_data', {})
     
     if not broadcast_data.get('text'):
         await query.edit_message_text("❌ Duyuru metni bulunamadı!")
         return
     
-    # Onay mesajı
     keyboard = [
         [
             InlineKeyboardButton("✅ Evet, Gönder", callback_data="execute_broadcast"),
@@ -886,9 +837,12 @@ async def execute_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text("📤 Duyuru gönderiliyor... Lütfen bekleyin.")
     
+    if 'broadcast_data' not in context.user_data:
+        await query.edit_message_text("❌ Duyuru verisi bulunamadı!")
+        return
+    
     broadcast_data = context.user_data.get('broadcast_data', {})
     
-    # Tüm kullanıcıları al
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("SELECT user_id FROM users WHERE banned=0")
@@ -899,7 +853,6 @@ async def execute_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     success = 0
     failed = 0
     
-    # Buton oluştur
     reply_markup = None
     if broadcast_data.get('button_text') and broadcast_data.get('button_url'):
         keyboard = [[InlineKeyboardButton(
@@ -908,12 +861,10 @@ async def execute_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )]]
         reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # Her kullanıcıya gönder
     for i, user in enumerate(users):
         try:
             user_id = user[0]
             
-            # Medya türüne göre gönder
             if broadcast_data.get('photo'):
                 await context.bot.send_photo(
                     chat_id=user_id,
@@ -940,7 +891,6 @@ async def execute_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             success += 1
             
-            # Her 10 mesajda bir bekle (rate limit için)
             if i % 10 == 0:
                 await asyncio.sleep(0.5)
                 
@@ -948,7 +898,6 @@ async def execute_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             failed += 1
             logger.error(f"Duyuru gönderilemedi {user[0]}: {e}")
     
-    # Sonuç mesajı
     result_text = (
         f"✅ **DUYURU TAMAMLANDI**\n\n"
         f"📊 **İstatistikler:**\n"
@@ -967,7 +916,6 @@ async def execute_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
     
-    # Temizle
     context.user_data.pop('broadcast_data', None)
 
 # 31) DUZENLEME
@@ -982,7 +930,6 @@ async def cancel_broadcast_final(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     await query.answer("❌ Duyuru iptal edildi")
     
-    # Temizle
     context.user_data.pop('broadcast_data', None)
     
     await query.edit_message_text(
@@ -1011,7 +958,6 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     c.execute("SELECT COUNT(*) FROM users WHERE banned=1")
     banned_users = c.fetchone()[0]
     
-    # Aktif kullanıcılar (son 7 gün)
     week_ago = date.today().isoformat()
     c.execute("SELECT COUNT(*) FROM users WHERE joined_date >= ?", (week_ago,))
     active_users = c.fetchone()[0]
@@ -1048,7 +994,6 @@ async def admin_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text("🧪 Test mesajları gönderiliyor...")
     
-    # Tüm dillerde test mesajı gönder
     for lang_code in LANGUAGES:
         await send_welcome_menu(query.from_user.id, context.bot, lang_code)
         await asyncio.sleep(1)
@@ -1120,7 +1065,7 @@ async def admin_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.MARKDOWN
         )
 
-# 38) İSTATİSTİKLER (/stats) - Komut versiyonu
+# 38) İSTATİSTİKLER (/stats)
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
@@ -1174,7 +1119,6 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         target_id = int(context.args[0])
         
-        # Kendini banlamasını engelle
         if target_id == ADMIN_ID:
             await update.message.reply_text("❌ Kendinizi banlayamazsınız!")
             return
@@ -1182,10 +1126,8 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn = sqlite3.connect(DB_NAME)
         c = conn.cursor()
         
-        # Kullanıcı var mı kontrol et
         c.execute("SELECT user_id FROM users WHERE user_id=?", (target_id,))
         if not c.fetchone():
-            # Kullanıcıyı ekle
             c.execute("INSERT INTO users (user_id, lang, joined_date, banned) VALUES (?, ?, ?, ?)",
                      (target_id, 'en', date.today().isoformat(), 1))
         else:
@@ -1255,7 +1197,6 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user.id != ADMIN_ID:
         return
     
-    # Temizle
     context.user_data.pop('broadcast_data', None)
     
     await update.message.reply_text(
@@ -1330,4 +1271,4 @@ def main():
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
-    main()
+    main()llllllllllll
