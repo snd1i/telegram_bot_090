@@ -4,8 +4,7 @@ import json
 import os
 
 # Bot token'ınızı buraya yapıştırın
-BOT_TOKEN = os.environ.get('BOT_TOKEN', 'BURAYA_TOKENINIZI_YAPIŞTIRIN')
-
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
 # Kullanıcı verilerini saklamak için JSON dosyası
 USER_DATA_FILE = 'user_data.json'
 
