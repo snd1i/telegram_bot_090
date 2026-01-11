@@ -3,9 +3,23 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 from telegram.constants import ChatMemberStatus
 import json
 import os
+import asyncio
+from threading import Thread
+from flask import Flask, Response
 
 # Bot token'ınızı Railway environment variable'dan alın
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
+
+# Flask web sunucusu
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running! 🤖"
+
+@app.route('/health')
+def health():
+    return Response("OK", status=200)
 
 # Dosya yolları
 USER_DATA_FILE = 'user_data.json'
@@ -67,7 +81,7 @@ LANGUAGES = {
         'subscribe_button': 'چوونە ناو کەناڵەکە',
         'check_button': '✅ پشکنین',
         'already_subscribed': '✅ سوپاس! ئێستا دەتوانیت بۆتەکە بەکاربهێنیت.',
-        'admin_only': '❌ تەنیا بەڕێوەبەر دەتوانێت ئەم فرمانە بەکاربهێنێت!'
+        'admin_only': '❌ تەنیا بەڕێوەبەr دەتوانێت ئەم فرمانە بەکاربهێنێت!'
     },
     'en': {
         'name': 'English 🇬🇧',
@@ -256,7 +270,7 @@ async def join_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🔗 **Davet Linki:** {config.get('channel_invite_link', 'Ayarlanmamış')}\n"
             f"📌 **Zorunlu mu?:** {'✅ EVET' if config.get('required_channel') else '❌ HAYIR'}\n\n"
             "**Komutlar:**\n"
-            "/join @kanaladi - Kanalı ayarla (örn: @example)\n"
+            "/join @kanaladi - Kanalı ayarla\n"
             "/join link https://t.me/... - Davet linkini ayarla\n"
             "/join on - Zorunlu aboneliği aç\n"
             "/join off - Zorunlu aboneliği kapat\n"
@@ -311,7 +325,6 @@ async def join_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 f"✅ Kanal erişilebilir!\n"
                 f"Başlık: {chat.title}\n"
-                f"Kullanıcı adı: @{chat.username}\n"
                 f"ID: {chat.id}"
             )
         except Exception as e:
@@ -350,36 +363,7 @@ async def join_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"📎 Davet linki: {config['channel_invite_link']}"
             )
         except Exception as e:
-            await update.message.reply_text(f"❌ Kanal ayarlama hatası: {str(e)}\nBotun kanalda olduğundan emin olun!")
-        
-    elif 't.me/' in command:
-        # t.me/kanaladi formatı
-        if 't.me/' in command:
-            channel_name = command.split('t.me/')[-1]
-            channel_username = f"@{channel_name}"
-        else:
-            channel_username = f"@{command}"
-        
-        try:
-            # Kanalı kontrol et
-            chat = await context.bot.get_chat(chat_id=channel_username)
-            config['channel_username'] = channel_username
-            config['channel_id'] = chat.id
-            
-            # Varsayılan davet linki oluştur
-            if not config.get('channel_invite_link'):
-                config['channel_invite_link'] = f"https://t.me/{channel_name}"
-            
-            save_config(config)
-            await update.message.reply_text(
-                f"✅ Kanal başarıyla ayarlandı!\n"
-                f"📢 İsim: {chat.title}\n"
-                f"👤 Kullanıcı adı: {channel_username}\n"
-                f"🆔 ID: {chat.id}\n"
-                f"📎 Davet linki: {config['channel_invite_link']}"
-            )
-        except Exception as e:
-            await update.message.reply_text(f"❌ Kanal ayarlama hatası: {str(e)}\nBotun kanalda olduğundan emin olun!")
+            await update.message.reply_text(f"❌ Kanal ayarlama hatası: {str(e)}")
         
     else:
         await update.message.reply_text("❌ Geçersiz komut! /join yazarak yardım alın.")
@@ -453,6 +437,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(lang_data['help_text'])
 
 # ========== BOT BAŞLATMA ==========
+def run_flask():
+    """Flask web sunucusunu başlat"""
+    port = int(os.environ.get('PORT', 8080))
+    print(f"🌐 Web sunucusu {port} portunda başlatılıyor...")
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
 def main():
     """Botu başlat"""
     # Token kontrolü
@@ -460,6 +450,11 @@ def main():
         print("❌ Hata: BOT_TOKEN environment variable ayarlanmamış!")
         print("Railway → Variables → BOT_TOKEN ekleyin")
         return
+    
+    # Flask web sunucusunu ayrı thread'de başlat
+    flask_thread = Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
     
     # Config dosyasını yükle
     config = load_config()
@@ -477,6 +472,7 @@ def main():
     print(f"👑 Admin ID: {config.get('admin_id')}")
     print(f"📢 Kanal: {config.get('channel_username', 'Ayarlanmamış')}")
     print(f"🔒 Zorunlu Abonelik: {config.get('required_channel', False)}")
+    print("✅ Healthcheck endpoint: /health")
     
     # Polling'i başlat
     application.run_polling(allowed_updates=Update.ALL_TYPES)
