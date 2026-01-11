@@ -33,7 +33,18 @@ class Database:
     
     def create_user(self, user_id, username=None, first_name=None, language_code=None):
         """Yeni kullanıcı oluştur"""
-        from handlers import detect_language  # Circular import'u önlemek için
+        # Circular import'u önlemek için fonksiyonu buraya taşıdım
+        def detect_language(language_code):
+            if language_code:
+                if language_code.startswith('tr'):
+                    return "tr"
+                elif language_code.startswith('ar'):
+                    return "ar"
+                elif language_code in ['ku', 'ckb']:
+                    return "ckb"
+                elif language_code.startswith('en'):
+                    return "en"
+            return "en"
         
         default_lang = detect_language(language_code)
         
