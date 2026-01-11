@@ -554,22 +554,32 @@ async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# 20) DUYURU METNİ ALMA
+# 20) DUYURU METNİ ALMA - DÜZELTİLDİ
 async def receive_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
         return
     
     if 'broadcast_data' not in context.user_data:
-        await update.message.reply_text("❌ Duyuru verisi bulunamadı. Lütfen /admin ile yeniden başlayın.")
+        await update.message.reply_text("❌ Lütfen önce /admin yazıp duyuru başlatın.")
         return
     
     broadcast_data = context.user_data.get('broadcast_data', {})
     
+    # SADECE text adımındaysa çalış
     if broadcast_data.get('step') != 'text':
-        await update.message.reply_text("❌ Yanlış adım. Lütfen önce duyuru metnini yazın.")
+        current_step = broadcast_data.get('step', 'unknown')
+        step_messages = {
+            'button_text': "⚠️ Şu anda buton metni bekleniyor. Lütfen buton metnini yazın.",
+            'button_url': "⚠️ Şu anda buton linki bekleniyor. Lütfen buton linkini yazın.",
+            'waiting_photo': "⚠️ Şu anda resim bekleniyor. Lütfen resim gönderin.",
+            'waiting_video': "⚠️ Şu anda video bekleniyor. Lütfen video gönderin."
+        }
+        message = step_messages.get(current_step, "❌ Yanlış adım. Lütfen önce duyuru metnini yazın.")
+        await update.message.reply_text(message)
         return
     
+    # Metni kaydet
     broadcast_data['text'] = update.message.text
     broadcast_data['step'] = 'media'
     
@@ -682,13 +692,14 @@ async def receive_button_text(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     if 'broadcast_data' not in context.user_data:
-        await update.message.reply_text("❌ Duyuru verisi bulunamadı. Lütfen /admin ile yeniden başlayın.")
+        await update.message.reply_text("❌ Lütfen önce /admin yazıp duyuru başlatın.")
         return
     
     broadcast_data = context.user_data.get('broadcast_data', {})
     
+    # SADECE button_text adımındaysa çalış
     if broadcast_data.get('step') != 'button_text':
-        await update.message.reply_text("❌ Yanlış adım. Lütfen buton eklemek için '🔘 Buton Ekle' butonuna tıklayın.")
+        await update.message.reply_text("⚠️ Şu anda buton metni beklenmiyor. Lütfen önce '🔘 Buton Ekle' butonuna tıklayın.")
         return
     
     broadcast_data['button_text'] = update.message.text
@@ -709,13 +720,14 @@ async def receive_button_url(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     
     if 'broadcast_data' not in context.user_data:
-        await update.message.reply_text("❌ Duyuru verisi bulunamadı. Lütfen /admin ile yeniden başlayın.")
+        await update.message.reply_text("❌ Lütfen önce /admin yazıp duyuru başlatın.")
         return
     
     broadcast_data = context.user_data.get('broadcast_data', {})
     
+    # SADECE button_url adımındaysa çalış
     if broadcast_data.get('step') != 'button_url':
-        await update.message.reply_text("❌ Yanlış adım. Lütfen önce buton metnini yazın.")
+        await update.message.reply_text("⚠️ Şu anda buton linki beklenmiyor. Lütfen önce buton metnini yazın.")
         return
     
     broadcast_data['button_url'] = update.message.text
@@ -723,7 +735,7 @@ async def receive_button_url(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     await show_broadcast_preview(update, context, "✅ Buton eklendi!")
 
-# 27) DUYURU ÖNİZLEME GÖSTER - DÜZELTİLDİ
+# 27) DUYURU ÖNİZLEME GÖSTER
 async def show_broadcast_preview(update: Update, context: ContextTypes.DEFAULT_TYPE, message=""):
     if 'broadcast_data' not in context.user_data:
         if hasattr(update, 'message'):
@@ -1204,7 +1216,31 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Yeni duyuru için /admin yazın."
     )
 
-# 43) ANA UYGULAMA
+# 43) YENİ: TÜM ADMIN MESAJLARINI YÖNETEN FONKSİYON
+async def handle_admin_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user.id != ADMIN_ID:
+        return
+    
+    # Eğer broadcast_data yoksa, normal bir mesajdır
+    if 'broadcast_data' not in context.user_data:
+        return
+    
+    broadcast_data = context.user_data.get('broadcast_data', {})
+    current_step = broadcast_data.get('step', 'unknown')
+    
+    # Adıma göre yönlendir
+    if current_step == 'text':
+        await receive_broadcast_text(update, context)
+    elif current_step == 'button_text':
+        await receive_button_text(update, context)
+    elif current_step == 'button_url':
+        await receive_button_url(update, context)
+    else:
+        # Diğer adımlarda mesaj gönderme
+        await update.message.reply_text(f"⚠️ Şu anda {current_step} adımındasınız. Lütfen bekleneni yapın.")
+
+# 44) ANA UYGULAMA - DÜZELTİLDİ
 def main():
     application = Application.builder().token(BOT_TOKEN).build()
     
@@ -1243,25 +1279,16 @@ def main():
     application.add_handler(CallbackQueryHandler(admin_unban_menu, pattern="^admin_unban_menu$"))
     application.add_handler(CallbackQueryHandler(admin_main, pattern="^admin_main$"))
     
-    # Mesaj handler'ları (duyuru için)
+    # TEK BİR MessageHandler ile tüm admin mesajlarını yönet
     application.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND & filters.User(ADMIN_ID),
-        receive_broadcast_text
+        handle_admin_messages
     ))
     
+    # Medya mesajları için ayrı handler
     application.add_handler(MessageHandler(
         (filters.PHOTO | filters.VIDEO) & filters.User(ADMIN_ID),
         receive_media
-    ))
-    
-    application.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND & filters.User(ADMIN_ID),
-        receive_button_text
-    ))
-    
-    application.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND & filters.User(ADMIN_ID),
-        receive_button_url
     ))
     
     # Hata handler
