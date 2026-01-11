@@ -2,6 +2,7 @@ import logging
 import json
 import sqlite3
 import os
+import re
 from datetime import datetime, date
 from typing import Dict, Optional, Tuple, List
 from telegram import (
@@ -516,6 +517,7 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = [
         [InlineKeyboardButton("📢 Duyuru Gönder", callback_data="start_broadcast")],
+        [InlineKeyboardButton("⚡ Hızlı Buton", callback_data="quick_button")],
         [InlineKeyboardButton("📊 İstatistikler", callback_data="admin_stats")],
         [InlineKeyboardButton("🧪 Test Mesajı", callback_data="admin_test")],
         [InlineKeyboardButton("🚫 Kullanıcı Banla", callback_data="admin_ban_menu")],
@@ -529,7 +531,153 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# 19) DUYURU BAŞLATMA
+# 19) HIZLI BUTON SİSTEMİ - YENİ EKLENDİ
+async def quick_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    await query.edit_message_text(
+        "⚡ **Hızlı Buton Oluşturma**\n\n"
+        "**Format:**\n"
+        "`Buton Adı = https://link.com`\n\n"
+        "**Örnek:**\n"
+        "`Prompt Aç = https://t.me/PrompttAI_bot`\n\n"
+        "Şimdi buton bilgilerini yazın:",
+        parse_mode=ParseMode.MARKDOWN
+    )
+    
+    context.user_data['waiting_for_quick_button'] = True
+
+# 20) HIZLI BUTON MESAJI ALMA
+async def receive_quick_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user.id != ADMIN_ID:
+        return
+    
+    if not context.user_data.get('waiting_for_quick_button'):
+        return
+    
+    message = update.message.text
+    
+    # "Buton Adı = https://link.com" formatını parse et
+    if "=" in message:
+        try:
+            parts = message.split("=", 1)
+            button_name = parts[0].strip()
+            button_url = parts[1].strip()
+            
+            # URL kontrolü
+            if not button_url.startswith(("http://", "https://")):
+                button_url = "https://" + button_url
+            
+            # Onay mesajı
+            keyboard = [
+                [
+                    InlineKeyboardButton("✅ Evet, Gönder", callback_data=f"send_quick_button:{button_name}:{button_url}"),
+                    InlineKeyboardButton("❌ Hayır, İptal", callback_data="cancel_quick_button")
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                f"⚡ **Buton Bilgileri:**\n\n"
+                f"**Buton Adı:** {button_name}\n"
+                f"**Buton Link:** {button_url}\n\n"
+                f"Bu buton tüm kullanıcılara gönderilecek.\n"
+                f"Onaylıyor musunuz?",
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.MARKDOWN
+            )
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Hata: {e}\n\nLütfen formatı doğru yazın: `Buton Adı = https://link.com`")
+    else:
+        await update.message.reply_text("❌ Yanlış format! Lütfen `Buton Adı = https://link.com` şeklinde yazın.")
+
+# 21) HIZLI BUTON GÖNDERME
+async def send_quick_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data.split(":")
+    button_name = data[1]
+    button_url = data[2]
+    
+    await query.edit_message_text("⚡ Buton gönderiliyor...")
+    
+    # Tüm kullanıcıları al
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT user_id FROM users WHERE banned=0")
+    users = c.fetchall()
+    conn.close()
+    
+    total_users = len(users)
+    success = 0
+    failed = 0
+    
+    # Buton oluştur
+    keyboard = [[InlineKeyboardButton(button_name, url=button_url)]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # Mesaj metni
+    message_text = f"🔗 **Yeni Bağlantı**\n\n{button_name} butonuna tıklayın:"
+    
+    # Her kullanıcıya gönder
+    for i, user in enumerate(users):
+        try:
+            user_id = user[0]
+            
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=message_text,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.MARKDOWN
+            )
+            
+            success += 1
+            
+            if i % 10 == 0:
+                await asyncio.sleep(0.5)
+                
+        except Exception as e:
+            failed += 1
+            logger.error(f"Buton gönderilemedi {user[0]}: {e}")
+    
+    result_text = (
+        f"✅ **BUTON GÖNDERİLDİ**\n\n"
+        f"**İstatistikler:**\n"
+        f"• Toplam Kullanıcı: {total_users}\n"
+        f"• Başarılı: {success}\n"
+        f"• Başarısız: {failed}\n\n"
+        f"**Buton:** {button_name}\n"
+        f"**Link:** {button_url}"
+    )
+    
+    keyboard = [[InlineKeyboardButton("🏠 Ana Menü", callback_data="admin_main")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        result_text,
+        reply_markup=reply_markup,
+        parse_mode=ParseMode.MARKDOWN
+    )
+    
+    context.user_data.pop('waiting_for_quick_button', None)
+
+# 22) HIZLI BUTON İPTAL
+async def cancel_quick_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer("❌ Buton iptal edildi")
+    
+    context.user_data.pop('waiting_for_quick_button', None)
+    
+    await query.edit_message_text(
+        "❌ Buton iptal edildi.\n\n"
+        "Ana menüye dönmek için /admin yazın."
+    )
+
+# 23) DUYURU BAŞLATMA
 async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -554,7 +702,7 @@ async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# 20) DUYURU METNİ ALMA - DÜZELTİLDİ
+# 24) DUYURU METNİ ALMA
 async def receive_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
@@ -566,20 +714,10 @@ async def receive_broadcast_text(update: Update, context: ContextTypes.DEFAULT_T
     
     broadcast_data = context.user_data.get('broadcast_data', {})
     
-    # SADECE text adımındaysa çalış
     if broadcast_data.get('step') != 'text':
-        current_step = broadcast_data.get('step', 'unknown')
-        step_messages = {
-            'button_text': "⚠️ Şu anda buton metni bekleniyor. Lütfen buton metnini yazın.",
-            'button_url': "⚠️ Şu anda buton linki bekleniyor. Lütfen buton linkini yazın.",
-            'waiting_photo': "⚠️ Şu anda resim bekleniyor. Lütfen resim gönderin.",
-            'waiting_video': "⚠️ Şu anda video bekleniyor. Lütfen video gönderin."
-        }
-        message = step_messages.get(current_step, "❌ Yanlış adım. Lütfen önce duyuru metnini yazın.")
-        await update.message.reply_text(message)
+        await update.message.reply_text("❌ Yanlış adım. Lütfen önce duyuru metnini yazın.")
         return
     
-    # Metni kaydet
     broadcast_data['text'] = update.message.text
     broadcast_data['step'] = 'media'
     
@@ -601,7 +739,7 @@ async def receive_broadcast_text(update: Update, context: ContextTypes.DEFAULT_T
         parse_mode=ParseMode.MARKDOWN
     )
 
-# 21) RESİM EKLEME
+# 25) RESİM EKLEME
 async def add_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -619,7 +757,7 @@ async def add_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# 22) VIDEO EKLEME
+# 26) VIDEO EKLEME
 async def add_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -637,7 +775,7 @@ async def add_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# 23) MEDYA ALMA (Resim/Video)
+# 27) MEDYA ALMA (Resim/Video)
 async def receive_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
@@ -650,7 +788,6 @@ async def receive_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
     broadcast_data = context.user_data.get('broadcast_data', {})
     
     if broadcast_data.get('step') == 'waiting_photo' and update.message.photo:
-        # En büyük resmi al
         photo = update.message.photo[-1]
         broadcast_data['photo'] = photo.file_id
         broadcast_data['step'] = 'media_done'
@@ -666,7 +803,7 @@ async def receive_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Lütfen resim veya video gönderin.")
 
-# 24) BUTON EKLEME
+# 28) BUTON EKLEME
 async def add_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -685,7 +822,7 @@ async def add_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# 25) BUTON METNİ ALMA - DÜZELTİLDİ
+# 29) BUTON METNİ ALMA
 async def receive_button_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
@@ -697,7 +834,6 @@ async def receive_button_text(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     broadcast_data = context.user_data.get('broadcast_data', {})
     
-    # SADECE button_text adımındaysa çalış
     if broadcast_data.get('step') != 'button_text':
         await update.message.reply_text("⚠️ Şu anda buton metni beklenmiyor. Lütfen önce '🔘 Buton Ekle' butonuna tıklayın.")
         return
@@ -713,7 +849,7 @@ async def receive_button_text(update: Update, context: ContextTypes.DEFAULT_TYPE
         parse_mode=ParseMode.MARKDOWN
     )
 
-# 26) BUTON LİNKİ ALMA - DÜZELTİLDİ
+# 30) BUTON LİNKİ ALMA
 async def receive_button_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
@@ -725,17 +861,16 @@ async def receive_button_url(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     broadcast_data = context.user_data.get('broadcast_data', {})
     
-    # SADECE button_url adımındaysa çalış
     if broadcast_data.get('step') != 'button_url':
         await update.message.reply_text("⚠️ Şu anda buton linki beklenmiyor. Lütfen önce buton metnini yazın.")
         return
     
     broadcast_data['button_url'] = update.message.text
-    broadcast_data['step'] = 'button_done'
+    broadcast_data['step'] = 'media'
     
     await show_broadcast_preview(update, context, "✅ Buton eklendi!")
 
-# 27) DUYURU ÖNİZLEME GÖSTER
+# 31) DUYURU ÖNİZLEME GÖSTER
 async def show_broadcast_preview(update: Update, context: ContextTypes.DEFAULT_TYPE, message=""):
     if 'broadcast_data' not in context.user_data:
         if hasattr(update, 'message'):
@@ -770,13 +905,15 @@ async def show_broadcast_preview(update: Update, context: ContextTypes.DEFAULT_T
     
     if not broadcast_data.get('button_text'):
         media_buttons.append(InlineKeyboardButton("🔘 Buton Ekle", callback_data="add_button"))
+    else:
+        media_buttons.append(InlineKeyboardButton("✏️ Butonu Düzenle", callback_data="add_button"))
     
     if media_buttons:
         keyboard.append(media_buttons)
     
     keyboard.append([
         InlineKeyboardButton("📤 Gönder", callback_data="confirm_send_broadcast"),
-        InlineKeyboardButton("✏️ Düzenle", callback_data="edit_broadcast"),
+        InlineKeyboardButton("✏️ Metni Düzenle", callback_data="edit_broadcast"),
         InlineKeyboardButton("❌ İptal", callback_data="cancel_broadcast_final")
     ])
     
@@ -804,14 +941,14 @@ async def show_broadcast_preview(update: Update, context: ContextTypes.DEFAULT_T
                 parse_mode=ParseMode.MARKDOWN
             )
 
-# 28) SEND_NOW (Direkt gönder)
+# 32) SEND_NOW (Direkt gönder)
 async def send_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
     await confirm_send_broadcast(update, context)
 
-# 29) DUYURU GÖNDERME ONAY
+# 33) DUYURU GÖNDERME ONAY
 async def confirm_send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -842,7 +979,7 @@ async def confirm_send_broadcast(update: Update, context: ContextTypes.DEFAULT_T
         parse_mode=ParseMode.MARKDOWN
     )
 
-# 30) DUYURUYU GERÇEKTEN GÖNDER
+# 34) DUYURUYU GERÇEKTEN GÖNDER
 async def execute_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -930,14 +1067,14 @@ async def execute_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     context.user_data.pop('broadcast_data', None)
 
-# 31) DUZENLEME
+# 35) DUZENLEME
 async def edit_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
     await start_broadcast(update, context)
 
-# 32) İPTAL
+# 36) İPTAL
 async def cancel_broadcast_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer("❌ Duyuru iptal edildi")
@@ -949,7 +1086,7 @@ async def cancel_broadcast_final(update: Update, context: ContextTypes.DEFAULT_T
         "Ana menüye dönmek için /admin yazın."
     )
 
-# 33) ADMIN İSTATİSTİKLER
+# 37) ADMIN İSTATİSTİKLER
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -999,7 +1136,7 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# 34) ADMIN TEST MESAJI
+# 38) ADMIN TEST MESAJI
 async def admin_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1018,7 +1155,7 @@ async def admin_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-# 35) ADMIN BAN MENÜ
+# 39) ADMIN BAN MENÜ
 async def admin_ban_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1033,7 +1170,7 @@ async def admin_ban_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# 36) ADMIN UNBAN MENÜ
+# 40) ADMIN UNBAN MENÜ
 async def admin_unban_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1048,13 +1185,14 @@ async def admin_unban_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# 37) ADMIN ANA MENÜ
+# 41) ADMIN ANA MENÜ
 async def admin_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
     keyboard = [
         [InlineKeyboardButton("📢 Duyuru Gönder", callback_data="start_broadcast")],
+        [InlineKeyboardButton("⚡ Hızlı Buton", callback_data="quick_button")],
         [InlineKeyboardButton("📊 İstatistikler", callback_data="admin_stats")],
         [InlineKeyboardButton("🧪 Test Mesajı", callback_data="admin_test")],
         [InlineKeyboardButton("🚫 Kullanıcı Banla", callback_data="admin_ban_menu")],
@@ -1077,7 +1215,7 @@ async def admin_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.MARKDOWN
         )
 
-# 38) İSTATİSTİKLER (/stats)
+# 42) İSTATİSTİKLER (/stats)
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
@@ -1117,7 +1255,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(stats_text, parse_mode=ParseMode.MARKDOWN)
 
-# 39) BAN/UNBAN SİSTEMİ
+# 43) BAN/UNBAN SİSTEMİ
 async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
@@ -1175,7 +1313,7 @@ async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         await update.message.reply_text("❌ Geçersiz kullanıcı ID'si.")
 
-# 40) /test KOMUTU
+# 44) /test KOMUTU
 async def test_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
@@ -1190,7 +1328,7 @@ async def test_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text("✅ Tüm dil versiyonları test edildi.")
 
-# 41) HATA YAKALAMA
+# 45) HATA YAKALAMA
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(msg="Exception occurred:", exc_info=context.error)
     
@@ -1203,44 +1341,48 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         pass
 
-# 42) İPTAL KOMUTU
+# 46) İPTAL KOMUTU
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
         return
     
     context.user_data.pop('broadcast_data', None)
+    context.user_data.pop('waiting_for_quick_button', None)
     
     await update.message.reply_text(
         "❌ İşlem iptal edildi.\n\n"
-        "Yeni duyuru için /admin yazın."
+        "Ana menüye dönmek için /admin yazın."
     )
 
-# 43) YENİ: TÜM ADMIN MESAJLARINI YÖNETEN FONKSİYON
+# 47) ADMIN MESAJ HANDLER
 async def handle_admin_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
         return
     
-    # Eğer broadcast_data yoksa, normal bir mesajdır
-    if 'broadcast_data' not in context.user_data:
+    # Hızlı buton için kontrol
+    if context.user_data.get('waiting_for_quick_button'):
+        await receive_quick_button(update, context)
         return
     
-    broadcast_data = context.user_data.get('broadcast_data', {})
-    current_step = broadcast_data.get('step', 'unknown')
-    
-    # Adıma göre yönlendir
-    if current_step == 'text':
-        await receive_broadcast_text(update, context)
-    elif current_step == 'button_text':
-        await receive_button_text(update, context)
-    elif current_step == 'button_url':
-        await receive_button_url(update, context)
-    else:
-        # Diğer adımlarda mesaj gönderme
-        await update.message.reply_text(f"⚠️ Şu anda {current_step} adımındasınız. Lütfen bekleneni yapın.")
+    # Duyuru için kontrol
+    if 'broadcast_data' in context.user_data:
+        broadcast_data = context.user_data.get('broadcast_data', {})
+        current_step = broadcast_data.get('step', 'unknown')
+        
+        if current_step == 'text':
+            await receive_broadcast_text(update, context)
+        elif current_step == 'button_text':
+            await receive_button_text(update, context)
+        elif current_step == 'button_url':
+            await receive_button_url(update, context)
+        elif current_step in ['waiting_photo', 'waiting_video']:
+            await update.message.reply_text(f"⚠️ Şu anda {current_step} adımındasınız. Lütfen bekleneni yapın.")
+        elif current_step in ['media', 'media_done']:
+            await update.message.reply_text("ℹ️ Duyurunuz hazır. Lütfen önizlemedeki butonları kullanın.")
 
-# 44) ANA UYGULAMA - DÜZELTİLDİ
+# 48) ANA UYGULAMA
 def main():
     application = Application.builder().token(BOT_TOKEN).build()
     
@@ -1265,12 +1407,15 @@ def main():
     
     # Admin callback handler'ları
     application.add_handler(CallbackQueryHandler(start_broadcast, pattern="^start_broadcast$"))
+    application.add_handler(CallbackQueryHandler(quick_button, pattern="^quick_button$"))
     application.add_handler(CallbackQueryHandler(add_photo, pattern="^add_photo$"))
     application.add_handler(CallbackQueryHandler(add_video, pattern="^add_video$"))
     application.add_handler(CallbackQueryHandler(add_button, pattern="^add_button$"))
     application.add_handler(CallbackQueryHandler(send_now, pattern="^send_now$"))
     application.add_handler(CallbackQueryHandler(confirm_send_broadcast, pattern="^confirm_send_broadcast$"))
     application.add_handler(CallbackQueryHandler(execute_broadcast, pattern="^execute_broadcast$"))
+    application.add_handler(CallbackQueryHandler(send_quick_button, pattern="^send_quick_button:"))
+    application.add_handler(CallbackQueryHandler(cancel_quick_button, pattern="^cancel_quick_button$"))
     application.add_handler(CallbackQueryHandler(edit_broadcast, pattern="^edit_broadcast$"))
     application.add_handler(CallbackQueryHandler(cancel_broadcast_final, pattern="^cancel_broadcast_final$"))
     application.add_handler(CallbackQueryHandler(admin_stats, pattern="^admin_stats$"))
@@ -1279,13 +1424,12 @@ def main():
     application.add_handler(CallbackQueryHandler(admin_unban_menu, pattern="^admin_unban_menu$"))
     application.add_handler(CallbackQueryHandler(admin_main, pattern="^admin_main$"))
     
-    # TEK BİR MessageHandler ile tüm admin mesajlarını yönet
+    # Mesaj handler'ları
     application.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND & filters.User(ADMIN_ID),
         handle_admin_messages
     ))
     
-    # Medya mesajları için ayrı handler
     application.add_handler(MessageHandler(
         (filters.PHOTO | filters.VIDEO) & filters.User(ADMIN_ID),
         receive_media
