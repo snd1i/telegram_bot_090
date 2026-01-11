@@ -1,14 +1,15 @@
 import os
 import logging
+import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 
 # ============ AYARLAR ============
 BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
-OWNER_ID = "5541236874"  # BURAYA SİZİN ID'NİZİ YAZDIM
+OWNER_ID = "5541236874"  # SİZİN ID'NİZ
 
-# Kanal bilgisi - Bot panelinden ayarlanacak
-user_channel = None
+# Kullanıcıları kaydetmek için JSON dosyası
+USERS_FILE = "users.json"
 
 # Log ayarı
 logging.basicConfig(
@@ -16,29 +17,81 @@ logging.basicConfig(
     level=logging.INFO
 )
 
+# ============ KULLANICI KAYDETME ============
+def save_user(user_id, username, first_name):
+    """Kullanıcıyı JSON dosyasına kaydet"""
+    try:
+        # Dosya varsa oku, yoksa oluştur
+        if os.path.exists(USERS_FILE):
+            with open(USERS_FILE, 'r', encoding='utf-8') as f:
+                users = json.load(f)
+        else:
+            users = {}
+        
+        # Kullanıcıyı ekle/güncelle
+        users[str(user_id)] = {
+            "username": username,
+            "first_name": first_name,
+            "joined_at": logging.Formatter().formatTime(logging.makeLogRecord({}))
+        }
+        
+        # Kaydet
+        with open(USERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(users, f, ensure_ascii=False, indent=2)
+            
+    except Exception as e:
+        logging.error(f"Kullanıcı kaydetme hatası: {e}")
+
+def get_all_users():
+    """Tüm kullanıcıları getir"""
+    try:
+        if os.path.exists(USERS_FILE):
+            with open(USERS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return {}
+    except:
+        return {}
+
 # ============ /start KOMUTU ============
 async def start(update: Update, context):
     user = update.effective_user
     
-    # SADECE SİZ GÖREBİLİRSİNİZ
+    # Kullanıcıyı kaydet
+    save_user(user.id, user.username, user.first_name)
+    
+    # SADECE SİZ GÖREBİLİRSİNİZ (Owner paneli)
     if str(user.id) == OWNER_ID:
         keyboard = [
-            [InlineKeyboardButton("📢 Kanalı Ayarla", callback_data='set_channel')],
-            [InlineKeyboardButton("📤 Duyuru Gönder", callback_data='send_announce')]
+            [InlineKeyboardButton("📢 Duyuru Gönder", callback_data='send_broadcast')],
+            [InlineKeyboardButton("👥 Kullanıcılar", callback_data='show_users')],
+            [InlineKeyboardButton("ℹ️ Yardım", callback_data='help')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await update.message.reply_text(
             f'👑 Merhaba Sahip {user.first_name}!\n\n'
-            f'Bot Kontrol Paneli\n'
-            f'ID: {user.id}\n\n'
+            f'📊 Bot İstatistikleri:\n'
+            f'• Toplam Kullanıcı: {len(get_all_users())}\n\n'
             f'Ne yapmak istersiniz?',
             reply_markup=reply_markup
         )
     else:
+        # NORMAL KULLANICILAR
+        keyboard = [
+            [InlineKeyboardButton("📢 Kanalım", url="https://t.me/snd_yatirim")],
+            [InlineKeyboardButton("🌟 Sahibim", url="https://t.me/snd1i")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
         await update.message.reply_text(
-            f'Merhaba {user.first_name}!\n'
-            f'Bu bot sadece yönetici içindir.'
+            f'👋 Merhaba {user.first_name}!\n\n'
+            f'Ben SND Yatırım Asistanıyım.\n\n'
+            f'✅ Özellikler:\n'
+            f'• Duyuruları takip et\n'
+            f'• Yatırım sinyalleri\n'
+            f'• Güncel bilgiler\n\n'
+            f'Sahibimden duyuruları buradan alacaksın!',
+            reply_markup=reply_markup
         )
 
 # ============ BUTON İŞLEMLERİ ============
@@ -46,148 +99,194 @@ async def button_handler(update: Update, context):
     query = update.callback_query
     await query.answer()
     
+    user_id = str(query.from_user.id)
+    
     # Sadece siz tıklayabilirsiniz
-    if str(query.from_user.id) != OWNER_ID:
-        await query.edit_message_text("❌ Yetkiniz yok!")
+    if user_id != OWNER_ID:
+        await query.edit_message_text("❌ Bu panel sadece yönetici içindir!")
         return
     
-    if query.data == 'set_channel':
+    if query.data == 'send_broadcast':
         await query.edit_message_text(
-            "📢 **Kanal Ayarlama**\n\n"
-            "Lütfen kanal @username gönderin:\n"
-            "Örnek: @snd_yatirim\n\n"
-            "Veya kanal ID:\n"
-            "Örnek: -1002129401570\n\n"
-            "Gönderdikten sonra bot kanalı kontrol edecek."
-        )
-        # Kanal bekliyoruz
-        context.user_data['waiting_for_channel'] = True
-        
-    elif query.data == 'send_announce':
-        global user_channel
-        
-        if not user_channel:
-            await query.edit_message_text(
-                "❌ Önce kanal ayarlayın!\n"
-                "📢 Kanalı Ayarla butonuna tıklayın."
-            )
-            return
-        
-        await query.edit_message_text(
-            "📤 **Duyuru Gönder**\n\n"
+            "📢 **Tüm Kullanıcılara Duyuru Gönder**\n\n"
             "Şimdi gönderin:\n"
             "• Yazı mesajı\n"
-            "• Resim + yazı\n"
-            "• Video + yazı\n\n"
-            "Gönderdiğiniz her şey kanala gidecek."
+            "• Resim + altyazı\n"
+            "• Video + altyazı\n\n"
+            "Gönderdiğiniz her şey TÜM kullanıcılara gidecek.\n\n"
+            "ℹ️ İptal için /start yazın."
         )
-        context.user_data['waiting_for_announce'] = True
-
-# ============ KANAL KAYDETME ============
-async def handle_channel(update: Update, context):
-    if str(update.effective_user.id) != OWNER_ID:
-        return
-    
-    if context.user_data.get('waiting_for_channel'):
-        channel = update.message.text.strip()
-        global user_channel
+        context.user_data['waiting_broadcast'] = True
         
-        try:
-            # Test mesajı gönder
-            test = await update.message.reply_text(f"🔍 Kanal kontrol ediliyor: {channel}")
-            
-            # Basit kontrol - @ işareti veya -100
-            if channel.startswith('@') or channel.startswith('-100'):
-                user_channel = channel
-                
-                await update.message.reply_text(
-                    f"✅ Kanal ayarlandı!\n\n"
-                    f"Kanal: {channel}\n\n"
-                    f"Artık duyuru gönderebilirsiniz.\n"
-                    f"/start yazıp '📤 Duyuru Gönder' butonuna tıklayın."
-                )
-            else:
-                await update.message.reply_text(
-                    "❌ Geçersiz format!\n"
-                    "@username veya -1001234567890 şeklinde olmalı."
-                )
-            
-        except Exception as e:
-            await update.message.reply_text(f"❌ Hata: {str(e)}")
-        
-        finally:
-            context.user_data['waiting_for_channel'] = False
-
-# ============ DUYURU GÖNDERME ============
-async def handle_announcement(update: Update, context):
-    if str(update.effective_user.id) != OWNER_ID:
-        return
-    
-    if context.user_data.get('waiting_for_announce'):
-        global user_channel
-        
-        if not user_channel:
-            await update.message.reply_text("❌ Kanal ayarlanmamış! /start")
+    elif query.data == 'show_users':
+        users = get_all_users()
+        if not users:
+            await query.edit_message_text("📭 Henüz hiç kullanıcı yok.")
             return
         
-        try:
-            # Buton oluştur
-            keyboard = [[
-                InlineKeyboardButton("📢 Katıl", url="https://t.me/snd_yatirim"),
-                InlineKeyboardButton("✅ Oldum", callback_data='joined')
-            ]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+        user_list = "\n".join([f"• {data['first_name']} (@{data['username'] or 'yok'})" 
+                              for data in list(users.values())[:20]])
+        
+        await query.edit_message_text(
+            f"👥 **Son 20 Kullanıcı**\n\n"
+            f"{user_list}\n\n"
+            f"📊 Toplam: {len(users)} kullanıcı"
+        )
+        
+    elif query.data == 'help':
+        await query.edit_message_text(
+            "🤖 **Yönetici Kılavuzu**\n\n"
+            "📢 **Duyuru Gönder:**\n"
+            "1. '📢 Duyuru Gönder' butonuna tıkla\n"
+            "2. Mesajını gönder (yazı/resim/video)\n"
+            "3. Bot tüm kullanıcılara gönderecek\n\n"
+            "👥 **Kullanıcılar:**\n"
+            "• Tüm bot kullanıcılarını gör\n"
+            "• Toplam sayıyı kontrol et\n\n"
+            "💡 **Not:** Her /start yazan kullanıcı otomatik kaydedilir."
+        )
+
+# ============ DUYURU GÖNDERME (TÜM KULLANICILARA) ============
+async def handle_broadcast(update: Update, context):
+    if str(update.effective_user.id) != OWNER_ID:
+        return
+    
+    if not context.user_data.get('waiting_broadcast'):
+        return
+    
+    message = update.message
+    users = get_all_users()
+    
+    if not users:
+        await message.reply_text("❌ Henüz hiç kullanıcı yok!")
+        context.user_data['waiting_broadcast'] = False
+        return
+    
+    # İstatistik
+    success_count = 0
+    fail_count = 0
+    
+    # İlk mesaj - "Gönderiliyor..."
+    status_msg = await message.reply_text(
+        f"⏳ Duyuru gönderiliyor...\n"
+        f"Toplam {len(users)} kullanıcı\n"
+        f"Başarılı: 0\n"
+        f"Başarısız: 0"
+    )
+    
+    try:
+        # RESİM ile duyuru
+        if message.photo:
+            photo = message.photo[-1]
+            caption = message.caption or "📢 Yeni Duyuru!"
             
-            message = update.message
-            
-            # RESİM
-            if message.photo:
-                photo = message.photo[-1]
-                caption = message.caption or "📢 Yeni Duyuru!"
+            for user_id in users.keys():
+                try:
+                    await context.bot.send_photo(
+                        chat_id=int(user_id),
+                        photo=photo.file_id,
+                        caption=caption
+                    )
+                    success_count += 1
+                except:
+                    fail_count += 1
                 
-                await update.message.reply_text(
-                    f"✅ Resimli duyuru hazır!\n"
-                    f"Kanal: {user_channel}\n"
-                    f"Mesaj: {caption}\n\n"
-                    f"⚠️ NOT: Kanal gönderimi test modunda."
-                )
+                # Her 5 gönderimde bir güncelle
+                if success_count % 5 == 0:
+                    await status_msg.edit_text(
+                        f"⏳ Duyuru gönderiliyor...\n"
+                        f"Toplam {len(users)} kullanıcı\n"
+                        f"Başarılı: {success_count}\n"
+                        f"Başarısız: {fail_count}"
+                    )
+        
+        # VIDEO ile duyuru
+        elif message.video:
+            video = message.video
+            caption = message.caption or "📢 Yeni Duyuru!"
             
-            # VIDEO
-            elif message.video:
-                caption = message.caption or "📢 Yeni Duyuru!"
+            for user_id in users.keys():
+                try:
+                    await context.bot.send_video(
+                        chat_id=int(user_id),
+                        video=video.file_id,
+                        caption=caption
+                    )
+                    success_count += 1
+                except:
+                    fail_count += 1
                 
-                await update.message.reply_text(
-                    f"✅ Videolu duyuru hazır!\n"
-                    f"Kanal: {user_channel}\n"
-                    f"Mesaj: {caption}\n\n"
-                    f"⚠️ NOT: Kanal gönderimi test modunda."
-                )
+                if success_count % 5 == 0:
+                    await status_msg.edit_text(
+                        f"⏳ Duyuru gönderiliyor...\n"
+                        f"Toplam {len(users)} kullanıcı\n"
+                        f"Başarılı: {success_count}\n"
+                        f"Başarısız: {fail_count}"
+                    )
+        
+        # METİN ile duyuru
+        elif message.text:
+            text = message.text
             
-            # METİN
-            elif message.text:
-                await update.message.reply_text(
-                    f"✅ Duyuru hazır!\n"
-                    f"Kanal: {user_channel}\n"
-                    f"Mesaj: {message.text}\n\n"
-                    f"⚠️ NOT: Kanal gönderimi test modunda."
-                )
-            
-            context.user_data['waiting_for_announce'] = False
-            
-        except Exception as e:
-            await update.message.reply_text(f"❌ Hata: {str(e)}")
+            for user_id in users.keys():
+                try:
+                    await context.bot.send_message(
+                        chat_id=int(user_id),
+                        text=text
+                    )
+                    success_count += 1
+                except:
+                    fail_count += 1
+                
+                if success_count % 5 == 0:
+                    await status_msg.edit_text(
+                        f"⏳ Duyuru gönderiliyor...\n"
+                        f"Toplam {len(users)} kullanıcı\n"
+                        f"Başarılı: {success_count}\n"
+                        f"Başarısız: {fail_count}"
+                    )
+        
+        # Sonuç mesajı
+        await status_msg.edit_text(
+            f"✅ **Duyuru Tamamlandı!**\n\n"
+            f"📊 İstatistikler:\n"
+            f"• Toplam Kullanıcı: {len(users)}\n"
+            f"• Başarılı: {success_count}\n"
+            f"• Başarısız: {fail_count}\n"
+            f"• Başarı Oranı: %{int((success_count/len(users))*100)}"
+        )
+        
+    except Exception as e:
+        await message.reply_text(f"❌ Hata oluştu: {str(e)}")
+    
+    finally:
+        context.user_data['waiting_broadcast'] = False
+
+# ============ /istatistik KOMUTU (SADECE SİZ) ============
+async def stats(update: Update, context):
+    if str(update.effective_user.id) != OWNER_ID:
+        return
+    
+    users = get_all_users()
+    
+    await update.message.reply_text(
+        f"📊 **Bot İstatistikleri**\n\n"
+        f"👥 Toplam Kullanıcı: {len(users)}\n\n"
+        f"📈 Son 5 Kullanıcı:\n" +
+        "\n".join([f"• {data['first_name']}" 
+                  for data in list(users.values())[-5:]])
+    )
 
 # ============ ANA PROGRAM ============
 def main():
     print("=" * 50)
-    print("🤖 TELEGRAM BOT BAŞLATILIYOR")
-    print(f"👑 Owner ID: {OWNER_ID}")
+    print("🤖 BOT BAŞLATILIYOR - TÜM KULLANICILARA DUYURU")
+    print(f"👑 Sahip ID: {OWNER_ID}")
     print("=" * 50)
     
     # Token kontrol
     if not BOT_TOKEN:
         print("❌ HATA: TELEGRAM_BOT_TOKEN yok!")
-        print("Railway → Variables → TELEGRAM_BOT_TOKEN ekleyin")
         return
     
     # Bot oluştur
@@ -195,14 +294,17 @@ def main():
     
     # Komutlar
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("istatistik", stats))
     app.add_handler(CallbackQueryHandler(button_handler))
     
-    # Mesajlar
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_channel))
-    app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.TEXT, handle_announcement))
+    # Mesajlar (duyuru için)
+    app.add_handler(MessageHandler(
+        filters.PHOTO | filters.VIDEO | filters.TEXT & ~filters.COMMAND,
+        handle_broadcast
+    ))
     
     # Başlat
-    print("✅ Bot başlatıldı. /start yazın...")
+    print("✅ Bot hazır! /start yazın...")
     app.run_polling()
 
 if __name__ == '__main__':
