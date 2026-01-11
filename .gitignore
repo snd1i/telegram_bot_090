@@ -2,8 +2,6 @@
 *.pyc
 __pycache__/
 venv/
-bot_database.db
-banned_users.json
+bot.db
 *.log
 secrets.txt
-config.json
