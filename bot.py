@@ -433,7 +433,7 @@ def load_extensions(application):
         if os.path.exists("extensions"):
             print("📁 Found extensions folder")
             
-            # basic.py'yi yükle
+            # 1. basic.py'yi yükle
             basic_path = os.path.join("extensions", "basic.py")
             if os.path.exists(basic_path):
                 try:
@@ -445,8 +445,21 @@ def load_extensions(application):
                         print("⚠️ basic.py has no setup() function")
                 except Exception as e:
                     print(f"❌ Error loading basic.py: {e}")
+            
+            # 2. admin.py'yi yükle
+            admin_path = os.path.join("extensions", "admin.py")
+            if os.path.exists(admin_path):
+                try:
+                    from extensions import admin
+                    if hasattr(admin, "setup"):
+                        admin.setup(application)
+                        print("✅ Loaded: admin.py")
+                    else:
+                        print("⚠️ admin.py has no setup() function")
+                except Exception as e:
+                    print(f"❌ Error loading admin.py: {e}")
             else:
-                print("ℹ️ basic.py not found in extensions/")
+                print("ℹ️ admin.py not found in extensions/")
                 
         else:
             print("ℹ️ No extensions folder found")
