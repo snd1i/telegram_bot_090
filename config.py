@@ -7,6 +7,9 @@ TOKEN = os.getenv("TOKEN", "")
 CHANNEL_LINK = "https://t.me/+wet-9MZuj044ZGQy"
 CHANNEL_ID = -1002072605977
 
+# Admin ID'leri (Telegram kullanıcı ID'nizi buraya ekleyin)
+ADMIN_IDS = [5541236874]  # KENDİ TELEGRAM ID'NİZİ BURAYA YAZIN
+
 # Varsayılan dil
 DEFAULT_LANGUAGE = "en"
 
@@ -16,3 +19,10 @@ BOT_VERSION = "1.0"
 
 # Dosya yolları
 DB_FILE = "users.json"
+MESSAGES_FILE = "bot_messages.json"
+SETTINGS_FILE = "bot_settings.json"
+
+# Admin fonksiyonu
+def is_admin(user_id):
+    """Kullanıcı admin mi?"""
+    return user_id in ADMIN_IDS
