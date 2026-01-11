@@ -4,159 +4,77 @@ from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
 
-from config import is_admin, ADMIN_IDS, CHANNEL_LINK, CHANNEL_ID
+from config import is_admin, CHANNEL_LINK, CHANNEL_ID
 from database import db
-from languages import get_text
-from keyboards import language_keyboard
 
-# JSON dosya yolları
-MESSAGES_FILE = "bot_messages.json"
-SETTINGS_FILE = "bot_settings.json"
+# ========== ADMIN KLAVYELERİ ==========
 
-def load_json_file(filename, default_data=None):
-    """JSON dosyasını yükle"""
-    if default_data is None:
-        default_data = {}
-    
-    try:
-        if os.path.exists(filename):
-            with open(filename, 'r', encoding='utf-8') as f:
-                return json.load(f)
-    except Exception as e:
-        print(f"JSON yükleme hatası {filename}: {e}")
-    
-    return default_data
-
-def save_json_file(filename, data):
-    """JSON dosyasına kaydet"""
-    try:
-        with open(filename, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        return True
-    except Exception as e:
-        print(f"JSON kaydetme hatası {filename}: {e}")
-        return False
-
-# ========== MANYBOT BENZERİ ADMIN KLAVYESİ ==========
-
-def manybot_admin_keyboard():
-    """Manybot benzeri admin klavyesi"""
+def admin_keyboard():
+    """Ana admin klavyesi"""
     keyboard = [
-        [
-            InlineKeyboardButton("📢 Duyuru Gönder", callback_data="mb_broadcast"),
-            InlineKeyboardButton("📝 Start Mesajı", callback_data="mb_start"),
-        ],
-        [
-            InlineKeyboardButton("🔗 Kanal Linki", callback_data="mb_channel"),
-            InlineKeyboardButton("📊 İstatistikler", callback_data="mb_stats"),
-        ],
-        [
-            InlineKeyboardButton("⚙️ Ayarlar", callback_data="mb_settings"),
-            InlineKeyboardButton("👥 Kullanıcılar", callback_data="mb_users"),
-        ],
-        [
-            InlineKeyboardButton("❌ Kapat", callback_data="mb_close"),
-        ]
+        [InlineKeyboardButton("📢 Duyuru Gönder", callback_data="admin_broadcast")],
+        [InlineKeyboardButton("📊 İstatistikler", callback_data="admin_stats")],
+        [InlineKeyboardButton("❌ Kapat", callback_data="admin_close")],
     ]
     return InlineKeyboardMarkup(keyboard)
 
-def broadcast_format_keyboard():
-    """Duyuru formatı seçim klavyesi"""
+def broadcast_options_keyboard():
+    """Duyuru seçenekleri"""
     keyboard = [
-        [
-            InlineKeyboardButton("📝 HTML Format", callback_data="format_html"),
-            InlineKeyboardButton("📄 Normal Metin", callback_data="format_normal"),
-        ],
-        [
-            InlineKeyboardButton("↩️ Geri", callback_data="mb_back"),
-            InlineKeyboardButton("❌ İptal", callback_data="mb_cancel"),
-        ]
+        [InlineKeyboardButton("📝 Metin Duyurusu", callback_data="broadcast_text")],
+        [InlineKeyboardButton("🔗 Butonlu Duyuru", callback_data="broadcast_button")],
+        [InlineKeyboardButton("↩️ Geri", callback_data="admin_back")],
     ]
     return InlineKeyboardMarkup(keyboard)
 
-def broadcast_preview_keyboard():
-    """Duyuru önizleme klavyesi"""
+def cancel_keyboard():
+    """İptal klavyesi"""
     keyboard = [
-        [
-            InlineKeyboardButton("👁️ Önizleme", callback_data="broadcast_preview"),
-            InlineKeyboardButton("🚀 Gönder", callback_data="broadcast_send"),
-        ],
-        [
-            InlineKeyboardButton("✏️ Düzenle", callback_data="mb_back"),
-            InlineKeyboardButton("❌ İptal", callback_data="mb_cancel"),
-        ]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-def stats_period_keyboard():
-    """İstatistik periyodu klavyesi"""
-    keyboard = [
-        [
-            InlineKeyboardButton("📅 Bugün", callback_data="stats_today"),
-            InlineKeyboardButton("📆 Bu Hafta", callback_data="stats_week"),
-        ],
-        [
-            InlineKeyboardButton("📊 Bu Ay", callback_data="stats_month"),
-            InlineKeyboardButton("📈 Tüm Zaman", callback_data="stats_total"),
-        ],
-        [
-            InlineKeyboardButton("↩️ Geri", callback_data="mb_back"),
-        ]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-def settings_keyboard():
-    """Ayarlar klavyesi"""
-    keyboard = [
-        [
-            InlineKeyboardButton("🎨 Duyuru Formatı", callback_data="setting_format"),
-            InlineKeyboardButton("🗑️ Otomatik Sil", callback_data="setting_auto_delete"),
-        ],
-        [
-            InlineKeyboardButton("👋 Hoşgeldin Mesajı", callback_data="setting_welcome"),
-            InlineKeyboardButton("🔄 Sıfırla", callback_data="setting_reset"),
-        ],
-        [
-            InlineKeyboardButton("↩️ Geri", callback_data="mb_back"),
-        ]
+        [InlineKeyboardButton("❌ İptal Et", callback_data="admin_cancel")],
     ]
     return InlineKeyboardMarkup(keyboard)
 
 # ========== ADMIN KOMUTLARI ==========
 
 def admin_command(update: Update, context: CallbackContext):
-    """/admin komutu"""
+    """Admin komutu"""
     user_id = update.effective_user.id
     
     if not is_admin(user_id):
-        update.message.reply_text("❌ Bu komutu kullanma yetkiniz yok!")
+        update.message.reply_text("❌ Bu komut sadece adminler için!")
         return
     
-    # Admin istatistikleri
     total_users = len(db.users)
-    active_today = 0
-    now = datetime.now()
     
-    for user_data in db.users.values():
-        if "last_seen" in user_data:
-            last_seen = datetime.fromisoformat(user_data["last_seen"])
-            if (now - last_seen).days < 1:
-                active_today += 1
-    
-    admin_message = f"🔧 *ADMIN PANELİ*\n\n"
-    admin_message += f"📊 *İstatistikler:*\n"
-    admin_message += f"• 👥 Toplam Kullanıcı: {total_users}\n"
-    admin_message += f"• 🟢 Bugün Aktif: {active_today}\n"
-    admin_message += f"• 📈 Aktif Oranı: {int(active_today/total_users*100) if total_users > 0 else 0}%\n\n"
-    admin_message += f"👇 Aşağıdaki seçeneklerden birini seçin:"
+    message = f"🔧 *ADMIN PANELİ*\n\n"
+    message += f"👥 Toplam Kullanıcı: {total_users}\n"
+    message += f"👇 Aşağıdaki seçeneklerden birini seçin:"
     
     update.message.reply_text(
-        admin_message,
+        message,
         parse_mode='Markdown',
-        reply_markup=manybot_admin_keyboard()
+        reply_markup=admin_keyboard()
     )
 
-# ========== CALLBACK HANDLER'LARI ==========
+def cancel_command(update: Update, context: CallbackContext):
+    """/cancel komutu"""
+    user_id = update.effective_user.id
+    
+    if not is_admin(user_id):
+        update.message.reply_text("Bu komutu kullanma yetkiniz yok!")
+        return
+    
+    # Tüm bekleme durumlarını temizle
+    for key in ['awaiting_broadcast', 'awaiting_button_text', 'awaiting_button_url']:
+        if key in context.user_data:
+            del context.user_data[key]
+    
+    update.message.reply_text(
+        "✅ Tüm işlemler iptal edildi!",
+        reply_markup=admin_keyboard()
+    )
+
+# ========== ADMIN CALLBACK HANDLER ==========
 
 def admin_callback_handler(update: Update, context: CallbackContext):
     """Admin callback'leri işle"""
@@ -169,308 +87,315 @@ def admin_callback_handler(update: Update, context: CallbackContext):
         query.edit_message_text("❌ Bu işlemi yapma yetkiniz yok!")
         return
     
-    callback_data = query.data
+    data = query.data
     
-    # Admin paneli ana menü
-    if callback_data == "admin_panel" or callback_data == "mb_back":
+    # Ana admin paneli
+    if data == "admin_back":
         total_users = len(db.users)
-        
-        admin_message = f"🔧 *ADMIN PANELİ*\n\n"
-        admin_message += f"📊 Toplam Kullanıcı: {total_users}\n\n"
-        admin_message += f"👇 Aşağıdaki seçeneklerden birini seçin:"
-        
         query.edit_message_text(
-            admin_message,
+            f"🔧 *ADMIN PANELİ*\n\nToplam Kullanıcı: {total_users}",
             parse_mode='Markdown',
-            reply_markup=manybot_admin_keyboard()
+            reply_markup=admin_keyboard()
         )
     
     # Duyuru başlat
-    elif callback_data == "mb_broadcast":
+    elif data == "admin_broadcast":
         query.edit_message_text(
-            "📢 *DUYURU GÖNDERME*\n\n"
-            "Duyurunuzu hangi formatta göndermek istersiniz?\n\n"
-            "• **HTML**: <b>Kalın</b>, <i>İtalik</i>, <u>Altı Çizili</u>\n"
-            "• **Normal**: Düz metin\n\n"
-            "Bir format seçin:",
+            "📢 *DUYURU GÖNDERME*\n\nDuyuru tipini seçin:",
             parse_mode='Markdown',
-            reply_markup=broadcast_format_keyboard()
+            reply_markup=broadcast_options_keyboard()
         )
     
-    # Duyuru formatı seçimi
-    elif callback_data.startswith("format_"):
-        format_type = callback_data.replace("format_", "")
-        
-        context.user_data['broadcast_format'] = format_type
+    # Metin duyurusu
+    elif data == "broadcast_text":
         context.user_data['awaiting_broadcast'] = True
-        
-        format_names = {
-            'html': 'HTML',
-            'normal': 'Normal Metin'
-        }
+        context.user_data['broadcast_type'] = 'text'
         
         query.edit_message_text(
-            f"✅ *{format_names[format_type]} formatı seçildi!*\n\n"
-            f"Şimdi duyuru mesajınızı gönderin:\n"
-            f"(Metin, fotoğraf, video veya dosya olabilir)\n\n"
-            f"❌ İptal etmek için: /cancel",
-            parse_mode='Markdown'
-        )
-    
-    # Start mesajı düzenleme
-    elif callback_data == "mb_start":
-        custom_messages = load_json_file(MESSAGES_FILE, {"start": {}})
-        
-        message_text = "📝 *START MESAJI DÜZENLEME*\n\n"
-        message_text += "Mevcut start mesajlarınız:\n"
-        
-        for lang in ['tr', 'en', 'ckb', 'badini', 'ar']:
-            msg = custom_messages.get("start", {}).get(lang, "Varsayılan mesaj kullanılıyor")
-            lang_name = {
-                'tr': 'Türkçe',
-                'en': 'İngilizce',
-                'ckb': 'Kürtçe Sorani',
-                'badini': 'Kürtçe Badini',
-                'ar': 'Arapça'
-            }.get(lang, lang)
-            message_text += f"\n{lang_name}: {msg[:50]}..."
-        
-        message_text += "\n\n✏️ Düzenlemek için dil seçin:"
-        
-        keyboard = []
-        for lang in ['tr', 'en', 'ckb', 'badini', 'ar']:
-            lang_name = {
-                'tr': '🇹🇷 Türkçe',
-                'en': '🇬🇧 İngilizce',
-                'ckb': '🇹🇯 Kürtçe Sorani',
-                'badini': '🇹🇯 Kürtçe Badini',
-                'ar': '🇮🇶 Arapça'
-            }.get(lang, lang)
-            
-            keyboard.append([
-                InlineKeyboardButton(lang_name, callback_data=f"edit_start_{lang}")
-            ])
-        
-        keyboard.append([
-            InlineKeyboardButton("↩️ Geri", callback_data="mb_back")
-        ])
-        
-        query.edit_message_text(
-            message_text,
+            "📝 *METİN DUYURUSU*\n\n"
+            "Duyuru mesajınızı gönderin:\n"
+            "(HTML formatını kullanabilirsiniz)\n\n"
+            "❌ İptal: /cancel",
             parse_mode='Markdown',
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=cancel_keyboard()
         )
     
-    # Kanal linki değiştir
-    elif callback_data == "mb_channel":
-        settings = load_json_file(SETTINGS_FILE, {"channel_link": CHANNEL_LINK})
-        current_link = settings.get("channel_link", CHANNEL_LINK)
-        
-        context.user_data['awaiting_channel_link'] = True
+    # Butonlu duyuru
+    elif data == "broadcast_button":
+        context.user_data['awaiting_broadcast'] = True
+        context.user_data['broadcast_type'] = 'button'
+        context.user_data['broadcast_step'] = 'message'
         
         query.edit_message_text(
-            f"🔗 *KANAL LİNKİ DEĞİŞTİRME*\n\n"
-            f"Mevcut link: {current_link}\n\n"
-            f"Yeni kanal linkini gönderin:\n"
-            f"(Örnek: https://t.me/kanal)\n\n"
-            f"❌ İptal: /cancel",
-            parse_mode='Markdown'
+            "🔗 *BUTONLU DUYURU*\n\n"
+            "Önce duyuru mesajınızı gönderin:\n"
+            "(HTML formatını kullanabilirsiniz)\n\n"
+            "❌ İptal: /cancel",
+            parse_mode='Markdown',
+            reply_markup=cancel_keyboard()
         )
     
     # İstatistikler
-    elif callback_data == "mb_stats":
-        query.edit_message_text(
-            "📊 *İSTATİSTİK PERİYODU SEÇİN*\n\n"
-            "Hangi periyot için istatistik görmek istersiniz?",
-            parse_mode='Markdown',
-            reply_markup=stats_period_keyboard()
-        )
-    
-    # İstatistik periyodu seçimi
-    elif callback_data.startswith("stats_"):
-        period = callback_data.replace("stats_", "")
-        show_period_stats(query, period)
-    
-    # Ayarlar
-    elif callback_data == "mb_settings":
-        settings = load_json_file(SETTINGS_FILE, {})
+    elif data == "admin_stats":
+        total_users = len(db.users)
         
-        message_text = "⚙️ *BOT AYARLARI*\n\n"
-        message_text += f"• Kanal Linki: {settings.get('channel_link', CHANNEL_LINK)}\n"
-        message_text += f"• Duyuru Formatı: {settings.get('broadcast_format', 'html').upper()}\n"
-        message_text += f"• Otomatik Silme: {'✅ Açık' if settings.get('auto_delete') else '❌ Kapalı'}\n\n"
-        message_text += "👇 Değiştirmek için bir seçenek seçin:"
+        # Dil dağılımı
+        lang_counts = {}
+        for user_data in db.users.values():
+            lang = user_data.get('language', 'unknown')
+            lang_counts[lang] = lang_counts.get(lang, 0) + 1
+        
+        stats_text = "📊 *İSTATİSTİKLER*\n\n"
+        stats_text += f"👥 Toplam Kullanıcı: {total_users}\n\n"
+        stats_text += "🌍 Dil Dağılımı:\n"
+        
+        for lang, count in lang_counts.items():
+            percentage = int(count / total_users * 100) if total_users > 0 else 0
+            stats_text += f"• {lang}: {count} ({percentage}%)\n"
         
         query.edit_message_text(
-            message_text,
+            stats_text,
             parse_mode='Markdown',
-            reply_markup=settings_keyboard()
+            reply_markup=admin_keyboard()
         )
-    
-    # Ayarları değiştir
-    elif callback_data.startswith("setting_"):
-        setting_type = callback_data.replace("setting_", "")
-        change_setting(query, setting_type)
-    
-    # Kullanıcılar
-    elif callback_data == "mb_users":
-        show_users_list(query)
     
     # Kapat
-    elif callback_data == "mb_close":
+    elif data == "admin_close":
         query.edit_message_text("✅ Admin paneli kapatıldı.")
     
     # İptal
-    elif callback_data == "mb_cancel":
+    elif data == "admin_cancel":
         # Temizlik
-        for key in ['broadcast_format', 'awaiting_broadcast', 'awaiting_channel_link']:
+        for key in ['awaiting_broadcast', 'broadcast_type', 'broadcast_step', 
+                   'awaiting_button_text', 'awaiting_button_url']:
             if key in context.user_data:
                 del context.user_data[key]
         
         query.edit_message_text(
-            "❌ *İşlem iptal edildi!*",
-            parse_mode='Markdown',
-            reply_markup=manybot_admin_keyboard()
+            "❌ İşlem iptal edildi!",
+            reply_markup=admin_keyboard()
         )
 
-# ========== YARDIMCI FONKSİYONLAR ==========
+# ========== MESAJ HANDLER (Duyuru için) ==========
 
-def show_period_stats(query, period):
-    """Periyodik istatistikleri göster"""
-    total_users = len(db.users)
-    now = datetime.now()
+def handle_admin_messages(update: Update, context: CallbackContext):
+    """Admin mesajlarını işle (duyuru için)"""
+    user_id = update.effective_user.id
     
-    # Dil dağılımı
-    lang_counts = {}
-    for user_data in db.users.values():
-        lang = user_data.get('language', 'unknown')
-        lang_counts[lang] = lang_counts.get(lang, 0) + 1
-    
-    lang_text = ""
-    for lang, count in lang_counts.items():
-        lang_name = {
-            'tr': 'Türkçe',
-            'en': 'İngilizce',
-            'ckb': 'Kürtçe Sorani',
-            'badini': 'Kürtçe Badini',
-            'ar': 'Arapça',
-            'unknown': 'Belirsiz'
-        }.get(lang, lang)
-        percentage = int(count / total_users * 100) if total_users > 0 else 0
-        lang_text += f"  • {lang_name}: {count} ({percentage}%)\n"
-    
-    period_names = {
-        'today': 'Bugün',
-        'week': 'Bu Hafta',
-        'month': 'Bu Ay',
-        'total': 'Tüm Zaman'
-    }
-    
-    period_name = period_names.get(period, period)
-    
-    stats_text = f"📊 *{period_name.upper()} İSTATİSTİKLER*\n\n"
-    stats_text += f"👥 *Toplam Kullanıcı:* {total_users}\n\n"
-    stats_text += f"🌍 *Dil Dağılımı:*\n{lang_text}\n"
-    
-    # Eğer veritabanı olsaydı burada periyodik istatistikler eklenirdi
-    stats_text += f"📈 *{period_name} Analiz:*\n"
-    stats_text += f"  • Aktif kullanıcı: {total_users}\n"
-    stats_text += f"  • Yeni kayıtlar: Veritabanı gerekiyor\n"
-    stats_text += f"  • Ortalama: Tüm kullanıcılar aktif\n\n"
-    
-    keyboard = [
-        [InlineKeyboardButton("🔄 Yenile", callback_data="mb_stats")],
-        [InlineKeyboardButton("↩️ Geri", callback_data="mb_back")]
-    ]
-    
-    query.edit_message_text(
-        stats_text,
-        parse_mode='Markdown',
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-def change_setting(query, setting_type):
-    """Ayarı değiştir"""
-    settings = load_json_file(SETTINGS_FILE, {})
-    
-    if setting_type == "format":
-        current_format = settings.get("broadcast_format", "html")
-        new_format = "normal" if current_format == "html" else "html"
-        settings["broadcast_format"] = new_format
-        save_json_file(SETTINGS_FILE, settings)
-        
-        query.edit_message_text(
-            f"✅ *Duyuru formatı değiştirildi!*\n\n"
-            f"Yeni format: {new_format.upper()}",
-            parse_mode='Markdown',
-            reply_markup=settings_keyboard()
-        )
-    
-    elif setting_type == "auto_delete":
-        current = settings.get("auto_delete", False)
-        settings["auto_delete"] = not current
-        save_json_file(SETTINGS_FILE, settings)
-        
-        status = "✅ Açık" if settings["auto_delete"] else "❌ Kapalı"
-        
-        query.edit_message_text(
-            f"✅ *Otomatik silme değiştirildi!*\n\n"
-            f"Yeni durum: {status}",
-            parse_mode='Markdown',
-            reply_markup=settings_keyboard()
-        )
-    
-    elif setting_type == "reset":
-        default_settings = {
-            "channel_link": CHANNEL_LINK,
-            "broadcast_format": "html",
-            "auto_delete": False
-        }
-        save_json_file(SETTINGS_FILE, default_settings)
-        
-        query.edit_message_text(
-            f"✅ *Ayarlar sıfırlandı!*\n\n"
-            f"Tüm ayarlar varsayılan değerlere döndü.",
-            parse_mode='Markdown',
-            reply_markup=settings_keyboard()
-        )
-
-def show_users_list(query):
-    """Kullanıcı listesini göster"""
-    users = db.users
-    total_users = len(users)
-    
-    if total_users == 0:
-        query.edit_message_text(
-            "👥 *KULLANICI LİSTESİ*\n\n"
-            "Henüz hiç kullanıcı yok!",
-            parse_mode='Markdown',
-            reply_markup=manybot_admin_keyboard()
-        )
+    if not is_admin(user_id):
         return
     
-    # Son 10 kullanıcıyı göster
-    recent_users = []
-    for user_id, user_data in list(users.items())[-10:]:
-        username = user_data.get('username', 'Yok')
-        name = user_data.get('first_name', 'İsimsiz')
-        lang = user_data.get('language', 'unknown')
+    # Duyuru mesajı bekleniyor mu?
+    if context.user_data.get('awaiting_broadcast'):
+        message = update.message
         
-        recent_users.append(f"• {name} (@{username}) - {lang}")
+        # Normal metin duyurusu
+        if context.user_data.get('broadcast_type') == 'text':
+            # Mesajı kaydet
+            context.user_data['broadcast_message'] = message
+            
+            # Önizleme göster
+            preview_text = message.text[:200] + "..." if len(message.text) > 200 else message.text
+            
+            update.message.reply_text(
+                f"✅ *Mesaj kaydedildi!*\n\n"
+                f"📄 Önizleme:\n{preview_text}\n\n"
+                f"👥 Gönderilecek: {len(db.users)} kullanıcı\n\n"
+                f"Duyuruyu göndermek istiyor musunuz?",
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🚀 Evet, Gönder", callback_data="confirm_send")],
+                    [InlineKeyboardButton("❌ Hayır, İptal", callback_data="admin_cancel")]
+                ])
+            )
+            
+            # Bekleme durumunu temizle
+            del context.user_data['awaiting_broadcast']
+        
+        # Butonlu duyuru - mesaj adımı
+        elif (context.user_data.get('broadcast_type') == 'button' and 
+              context.user_data.get('broadcast_step') == 'message'):
+            
+            # Mesajı kaydet
+            context.user_data['broadcast_message'] = message
+            context.user_data['broadcast_step'] = 'button_text'
+            
+            update.message.reply_text(
+                "✅ *Mesaj kaydedildi!*\n\n"
+                "Şimdi buton metnini gönderin:\n"
+                "(Örnek: Kanalımız, Web Sitemiz)\n\n"
+                "❌ İptal: /cancel",
+                reply_markup=cancel_keyboard()
+            )
+        
+        # Butonlu duyuru - buton metni adımı
+        elif (context.user_data.get('broadcast_type') == 'button' and 
+              context.user_data.get('broadcast_step') == 'button_text'):
+            
+            button_text = update.message.text.strip()
+            
+            if len(button_text) > 20:
+                update.message.reply_text(
+                    "❌ Buton metni çok uzun! En fazla 20 karakter.\n"
+                    "Tekrar gönderin:",
+                    reply_markup=cancel_keyboard()
+                )
+                return
+            
+            context.user_data['button_text'] = button_text
+            context.user_data['broadcast_step'] = 'button_url'
+            
+            update.message.reply_text(
+                f"✅ *Buton metni kaydedildi:* {button_text}\n\n"
+                f"Şimdi buton linkini gönderin:\n"
+                f"(Örnek: https://t.me/kanal)\n\n"
+                f"❌ İptal: /cancel"
+            )
+        
+        # Butonlu duyuru - buton linki adımı
+        elif (context.user_data.get('broadcast_type') == 'button' and 
+              context.user_data.get('broadcast_step') == 'button_url'):
+            
+            button_url = update.message.text.strip()
+            
+            # URL kontrolü
+            if not button_url.startswith(('http://', 'https://', 't.me/')):
+                update.message.reply_text(
+                    "❌ Geçersiz link! https:// veya t.me/ ile başlamalı.\n"
+                    "Tekrar gönderin:",
+                    reply_markup=cancel_keyboard()
+                )
+                return
+            
+            context.user_data['button_url'] = button_url
+            context.user_data['broadcast_step'] = 'preview'
+            
+            # Önizleme göster
+            message = context.user_data['broadcast_message']
+            button_text = context.user_data['button_text']
+            
+            preview = message.text[:150] + "..." if len(message.text) > 150 else message.text
+            
+            update.message.reply_text(
+                f"✅ *Buton bilgileri kaydedildi!*\n\n"
+                f"🔘 Buton: {button_text}\n"
+                f"🔗 Link: {button_url}\n\n"
+                f"📄 Önizleme:\n{preview}\n\n"
+                f"👥 Gönderilecek: {len(db.users)} kullanıcı\n\n"
+                f"Duyuruyu göndermek istiyor musunuz?",
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🚀 Evet, Gönder", callback_data="confirm_send")],
+                    [InlineKeyboardButton("❌ Hayır, İptal", callback_data="admin_cancel")]
+                ])
+            )
     
-    users_text = "👥 *KULLANICI LİSTESİ*\n\n"
-    users_text += f"📊 Toplam Kullanıcı: {total_users}\n\n"
-    users_text += "📋 Son 10 Kullanıcı:\n"
-    users_text += "\n".join(recent_users)
-    users_text += "\n\n_Not: Tüm listeyi görmek için geliştirme gerekli._"
+    # Kanal linki değiştirme
+    elif context.user_data.get('awaiting_channel_link'):
+        new_link = update.message.text.strip()
+        
+        # URL kontrolü
+        if not new_link.startswith(('http://', 'https://', 't.me/')):
+            update.message.reply_text("❌ Geçersiz link formatı!")
+            return
+        
+        # Ayarları kaydet (basit JSON)
+        settings = {"channel_link": new_link}
+        try:
+            with open("bot_settings.json", "w") as f:
+                json.dump(settings, f)
+        except:
+            pass
+        
+        del context.user_data['awaiting_channel_link']
+        
+        update.message.reply_text(
+            f"✅ Kanal linki güncellendi!\nYeni link: {new_link}",
+            reply_markup=admin_keyboard()
+        )
+
+# ========== DUYURU GÖNDERME ==========
+
+def send_broadcast_callback(update: Update, context: CallbackContext):
+    """Duyuruyu gönder"""
+    query = update.callback_query
+    query.answer()
     
-    keyboard = [
-        [InlineKeyboardButton("🔄 Yenile", callback_data="mb_users")],
-        [InlineKeyboardButton("↩️ Geri", callback_data="mb_back")]
-    ]
+    user_id = query.from_user.id
+    
+    if not is_admin(user_id):
+        return
+    
+    message = context.user_data.get('broadcast_message')
+    button_text = context.user_data.get('button_text')
+    button_url = context.user_data.get('button_url')
+    total_users = len(db.users)
+    
+    if not message:
+        query.edit_message_text("❌ Gönderilecek mesaj bulunamadı!")
+        return
+    
+    # Buton oluştur
+    reply_markup = None
+    if button_text and button_url:
+        reply_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton(button_text, url=button_url)
+        ]])
+    
+    sent = 0
+    failed = 0
+    
+    # İlerleme mesajı
+    progress_msg = query.edit_message_text(
+        f"🚀 Duyuru gönderiliyor...\n0/{total_users}"
+    )
+    
+    # Her kullanıcıya gönder
+    for user_id_str in db.users.keys():
+        try:
+            if message.text:
+                context.bot.send_message(
+                    chat_id=int(user_id_str),
+                    text=message.text,
+                    parse_mode='HTML',
+                    reply_markup=reply_markup
+                )
+            elif message.photo:
+                context.bot.send_photo(
+                    chat_id=int(user_id_str),
+                    photo=message.photo[-1].file_id,
+                    caption=message.caption,
+                    parse_mode='HTML',
+                    reply_markup=reply_markup
+                )
+            
+            sent += 1
+            
+            # Her 10 gönderimde güncelle
+            if sent % 10 == 0:
+                progress_msg.edit_text(f"🚀 Duyuru gönderiliyor...\n{sent}/{total_users}")
+            
+        except Exception as e:
+            failed += 1
+    
+    # Sonuç
+    result = f"✅ *DUYURU TAMAMLANDI!*\n\n"
+    result += f"✅ Başarılı: {sent}\n"
+    result += f"❌ Başarısız: {failed}\n"
+    result += f"📊 Toplam: {total_users}"
+    
+    if button_text:
+        result += f"\n🔘 Buton: {button_text}"
     
     query.edit_message_text(
-        users_text,
+        result,
         parse_mode='Markdown',
-        reply_markup=InlineKeyboardMarkup(keyboard)
-  )
+        reply_markup=admin_keyboard()
+    )
+    
+    # Temizlik
+    keys = ['broadcast_message', 'broadcast_type', 'broadcast_step',
+            'button_text', 'button_url', 'awaiting_broadcast']
+    for key in keys:
+        if key in context.user_data:
+            del context.user_data[key]
