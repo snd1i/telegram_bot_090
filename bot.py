@@ -1,7 +1,7 @@
 import os
 import logging
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 # Log ayarları
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -28,24 +28,24 @@ def kullanicilari_oku():
         logger.error(f"Okuma hatası: {e}")
     return []
 
-def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/start komutu"""
     user_id = str(update.effective_user.id)
     kaydet(user_id)
-    update.message.reply_text("Merhaba! Ben duyuru botuyum.\n/start yazarak kayıt olabilirsin.")
+    await update.message.reply_text("Merhaba! Ben duyuru botuyum.\n/start yazarak kayıt olabilirsin.")
 
-def duyuru(update: Update, context: CallbackContext):
+async def duyuru(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/duyuru komutu (sadece admin)"""
     user_id = update.effective_user.id
     
     if user_id != ADMIN_ID:
-        update.message.reply_text("Bu komutu sadece admin kullanabilir.")
+        await update.message.reply_text("Bu komutu sadece admin kullanabilir.")
         return
     
-    update.message.reply_text("Duyuru mesajınızı yazın:")
+    await update.message.reply_text("Duyuru mesajınızı yazın:")
     context.user_data["duyuru_gonder"] = True
 
-def mesaj_al(update: Update, context: CallbackContext):
+async def mesaj_al(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gelen mesajları işle"""
     user_id = update.effective_user.id
     
@@ -54,12 +54,12 @@ def mesaj_al(update: Update, context: CallbackContext):
         mesaj = update.message.text
         kullanicilar = kullanicilari_oku()
         
-        update.message.reply_text(f"Duyuru {len(kullanicilar)} kişiye gönderiliyor...")
+        await update.message.reply_text(f"Duyuru {len(kullanicilar)} kişiye gönderiliyor...")
         
         gonderilen = 0
         for kullanici in kullanicilar:
             try:
-                context.bot.send_message(
+                await context.bot.send_message(
                     chat_id=int(kullanici),
                     text=f"📢 **DUYURU**\n\n{mesaj}"
                 )
@@ -68,7 +68,7 @@ def mesaj_al(update: Update, context: CallbackContext):
                 logger.error(f"{kullanici} gönderilemedi: {e}")
         
         context.user_data["duyuru_gonder"] = False
-        update.message.reply_text(f"Duyuru tamamlandı!\nBaşarılı: {gonderilen} kişi")
+        await update.message.reply_text(f"Duyuru tamamlandı!\nBaşarılı: {gonderilen} kişi")
 
 def main():
     """Botu başlat"""
@@ -79,20 +79,18 @@ def main():
         print("Railway'de BOT_TOKEN environment variable ekleyin")
         return
     
-    # Eski sürüme uygun şekilde
-    updater = Updater(TOKEN, use_context=True)
-    dp = updater.dispatcher
+    # Yeni sürüme uygun şekilde
+    app = Application.builder().token(TOKEN).build()
     
     # Komutlar
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("duyuru", duyuru))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("duyuru", duyuru))
     
     # Mesajlar
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, mesaj_al))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mesaj_al))
     
     print("🤖 Bot başlatılıyor...")
-    updater.start_polling()
-    updater.idle()
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
