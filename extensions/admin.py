@@ -1,23 +1,32 @@
-# extensions/admin.py - PROFESYONEL DUYURU SİSTEMİ (DÜZELTİLMİŞ)
+# extensions/admin.py - PROFESYONEL DUYURU SİSTEMİ
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 import json
 import os
 
 # ========== DOSYA İŞLEMLERİ ==========
+CONFIG_FILE = 'config.json'
+USER_DATA_FILE = 'user_data.json'
+
 def load_config():
     """Config dosyasını yükle"""
     try:
-        with open('config.json', 'r', encoding='utf-8') as f:
-            return json.load(f)
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        else:
+            return {"admin_id": "5541236874"}
     except:
         return {"admin_id": "5541236874"}
 
 def load_user_data():
     """Kullanıcı verilerini yükle"""
     try:
-        with open('user_data.json', 'r', encoding='utf-8') as f:
-            return json.load(f)
+        if os.path.exists(USER_DATA_FILE):
+            with open(USER_DATA_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        else:
+            return {}
     except:
         return {}
 
@@ -26,44 +35,43 @@ def is_admin(user_id):
     config = load_config()
     return str(user_id) == config.get('admin_id', "5541236874")
 
-# ========== MESAJLAR (SADECE İNGİLİZCE) ==========
+# ========== MESAJLAR ==========
 TEXTS = {
     'admin_only': "❌ Only admin can use this command!",
-    'panel_title': "📢 **Send Broadcast**\n\nSelect an option below:",
-    'broadcast_created': "✅ Broadcast created! Now you can:",
+    'panel_title': "📢 **Broadcast Panel**\n\nSelect an option below:",
     'add_text': "📝 Add Text",
-    'add_media': "🖼️ Add Photo/Video",
+    'add_media': "🖼️ Add Media",
     'add_button': "🔘 Add Button",
     'preview': "👁️ Preview",
-    'send': "📤 Send to Everyone",
+    'send': "📤 Send",
     'back': "🔙 Back",
     'cancel': "✖️ Cancel",
-    'enter_text': "📝 Enter broadcast text:",
-    'text_added': "✅ Text added!",
-    'send_photo_video': "🖼️ Send photo or video:",
-    'media_added': "✅ Photo/video added!",
-    'enter_button_text': "🔘 Enter button text:",
-    'enter_button_url': "🔗 Enter button URL:",
-    'button_added': "✅ Button added!",
-    'preview_title': "👁️ **Broadcast Preview**\n\n",
-    'no_content': "⚠️ No content yet!",
-    'sending': "🔄 Sending...",
-    'sent_success': "✅ Broadcast sent to {} people!",
-    'sent_failed': "❌ Failed to reach {} people.",
+    'enter_text': "📝 Please send the broadcast text:",
+    'text_added': "✅ Text added successfully!",
+    'send_media': "🖼️ Please send a photo or video:",
+    'media_added': "✅ Media added successfully!",
+    'enter_button_text': "🔘 Please enter button text:",
+    'enter_button_url': "🔗 Please enter button URL:",
+    'button_added': "✅ Button added successfully!",
+    'no_content': "⚠️ No content added yet!",
+    'sending': "🔄 Sending broadcast to all users...",
+    'sent_success': "✅ Broadcast sent to {} users!",
+    'sent_failed': "❌ Failed to send to {} users.",
     'current_content': "📋 **Current Content:**\n",
     'text_content': "📝 Text: {}\n",
-    'media_content': "🖼️ Media: {}",
-    'buttons_content': "🔘 Buttons: {}",
+    'media_content': "🖼️ Media: {}\n",
+    'buttons_content': "🔘 Buttons: {}\n",
     'remove_last': "🗑️ Remove Last",
     'clear_all': "🧹 Clear All",
-    'confirm_send': "⚠️ **Confirm Send?**\n\nBroadcast will be sent to everyone.\n\n{} people will receive it.",
+    'confirm_send': "⚠️ **Confirm Broadcast**\n\nSend to {} users?",
     'yes_send': "✅ Yes, Send",
-    'no_cancel': "❌ No, Cancel",
-    'broadcast_cancelled': "📭 Broadcast cancelled."
+    'no_cancel': "❌ Cancel",
+    'broadcast_cancelled': "📭 Broadcast cancelled.",
+    'preview_title': "👁️ **Broadcast Preview**\n\n"
 }
 
-# ========== BROADCAST VERİ YAPISI ==========
-broadcast_data = {}
+# ========== SESSION YÖNETİMİ ==========
+broadcast_sessions = {}
 
 class BroadcastSession:
     def __init__(self, user_id):
@@ -73,44 +81,49 @@ class BroadcastSession:
         self.video = None
         self.buttons = []
         self.state = None
+        self.temp_button_text = None
     
     def get_summary(self):
         """İçerik özetini al"""
         summary = TEXTS['current_content']
         
         if self.text:
-            summary += TEXTS['text_content'].format(self.text[:50] + ("..." if len(self.text) > 50 else ""))
+            text_preview = self.text[:50] + "..." if len(self.text) > 50 else self.text
+            summary += TEXTS['text_content'].format(text_preview)
         
         if self.photo:
-            summary += TEXTS['media_content'].format("📷 Photo")
+            summary += TEXTS['media_content'].format("Photo")
         elif self.video:
-            summary += TEXTS['media_content'].format("🎬 Video")
+            summary += TEXTS['media_content'].format("Video")
         
         if self.buttons:
             button_texts = [btn['text'] for btn in self.buttons]
             summary += TEXTS['buttons_content'].format(", ".join(button_texts))
         
-        if not self.text and not self.photo and not self.video:
+        if not self.text and not self.photo and not self.video and not self.buttons:
             summary = TEXTS['no_content']
         
         return summary
     
     def reset(self):
+        """Session'ı sıfırla"""
         self.text = None
         self.photo = None
         self.video = None
         self.buttons = []
         self.state = None
+        self.temp_button_text = None
 
 def get_session(user_id):
+    """Kullanıcı için session al veya oluştur"""
     user_id_str = str(user_id)
-    if user_id_str not in broadcast_data:
-        broadcast_data[user_id_str] = BroadcastSession(user_id)
-    return broadcast_data[user_id_str]
+    if user_id_str not in broadcast_sessions:
+        broadcast_sessions[user_id_str] = BroadcastSession(user_id)
+    return broadcast_sessions[user_id_str]
 
-# ========== /settings KOMUTU ==========
+# ========== ANA KOMUT ==========
 async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ana broadcast komutu"""
+    """/settings komutu"""
     user_id = update.effective_user.id
     
     if not is_admin(user_id):
@@ -122,7 +135,7 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await show_main_panel(update, context)
 
-# ========== ANA PANEL GÖSTER ==========
+# ========== ANA PANEL ==========
 async def show_main_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ana paneli göster"""
     user_id = None
@@ -131,15 +144,17 @@ async def show_main_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query:
         user_id = update.callback_query.from_user.id
         message = update.callback_query.message
+        query = update.callback_query
     elif update.message:
         user_id = update.message.from_user.id
         message = update.message
     
-    if not user_id or not message:
+    if not user_id:
         return
     
     session = get_session(user_id)
     
+    # Klavye oluştur
     keyboard = [
         [InlineKeyboardButton(TEXTS['add_text'], callback_data="bc_add_text")],
         [InlineKeyboardButton(TEXTS['add_media'], callback_data="bc_add_media")],
@@ -156,137 +171,93 @@ async def show_main_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
+    # Mesaj metni
     text = TEXTS['panel_title'] + "\n\n" + session.get_summary()
     
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
-    else:
-        await message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+    # Mesajı gönder veya düzenle
+    try:
+        if update.callback_query:
+            await query.edit_message_text(
+                text=text,
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+        else:
+            await message.reply_text(
+                text=text,
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+    except Exception as e:
+        print(f"Panel error: {e}")
+        if update.message:
+            await update.message.reply_text(
+                text=text,
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
 
-# ========== METİN EKLEME ==========
-async def add_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Metin ekleme başlat"""
+# ========== BUTON İŞLEYİCİ ==========
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Callback butonlarını işle"""
     query = update.callback_query
     await query.answer()
     
     user_id = query.from_user.id
-    session = get_session(user_id)
-    session.state = 'waiting_text'
     
-    await query.message.reply_text(TEXTS['enter_text'])
-
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Metin girdisini al"""
-    user_id = update.effective_user.id
-    session = get_session(user_id)
-    
-    if session.state != 'waiting_text':
+    if not is_admin(user_id):
+        await query.edit_message_text(TEXTS['admin_only'])
         return
     
-    session.text = update.message.text
-    session.state = None
-    
-    await update.message.reply_text(TEXTS['text_added'])
-    await show_main_panel(update, context)
-
-# ========== MEDİA EKLEME ==========
-async def add_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Media ekleme başlat"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = query.from_user.id
     session = get_session(user_id)
-    session.state = 'waiting_media'
+    data = query.data
     
-    await query.message.reply_text(TEXTS['send_photo_video'])
-
-async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Media girdisini al"""
-    user_id = update.effective_user.id
-    session = get_session(user_id)
+    # BUTON İŞLEMLERİ
+    if data == "bc_add_text":
+        session.state = "waiting_text"
+        await query.message.reply_text(TEXTS['enter_text'])
     
-    if session.state != 'waiting_media':
-        return
+    elif data == "bc_add_media":
+        session.state = "waiting_media"
+        await query.message.reply_text(TEXTS['send_media'])
     
-    if update.message.photo:
-        session.photo = update.message.photo[-1].file_id
-        session.video = None
-    elif update.message.video:
-        session.video = update.message.video.file_id
-        session.photo = None
+    elif data == "bc_add_button":
+        session.state = "waiting_button_text"
+        await query.message.reply_text(TEXTS['enter_button_text'])
     
-    if update.message.caption:
-        session.text = update.message.caption
+    elif data == "bc_preview":
+        await preview_broadcast(query, session)
     
-    session.state = None
+    elif data == "bc_confirm":
+        await confirm_broadcast(query, session)
     
-    await update.message.reply_text(TEXTS['media_added'])
-    await show_main_panel(update, context)
-
-# ========== BUTON EKLEME ==========
-async def add_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Buton ekleme başlat"""
-    query = update.callback_query
-    await query.answer()
+    elif data == "bc_send_final":
+        await send_broadcast_final(update, context, session)
     
-    user_id = query.from_user.id
-    session = get_session(user_id)
-    session.state = 'waiting_btn_text'
+    elif data == "bc_remove_last":
+        await remove_last_item(session)
+        await show_main_panel(update, context)
     
-    await query.message.reply_text(TEXTS['enter_button_text'])
-
-async def handle_button_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Buton metnini al"""
-    user_id = update.effective_user.id
-    session = get_session(user_id)
+    elif data == "bc_clear_all":
+        session.reset()
+        await show_main_panel(update, context)
     
-    if session.state != 'waiting_btn_text':
-        return
+    elif data == "bc_cancel":
+        session.reset()
+        await query.edit_message_text(TEXTS['broadcast_cancelled'])
     
-    # Geçici saklama
-    session.temp_button_text = update.message.text
-    session.state = 'waiting_btn_url'
-    
-    await update.message.reply_text(TEXTS['enter_button_url'])
-
-async def handle_button_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Buton URL'sini al"""
-    user_id = update.effective_user.id
-    session = get_session(user_id)
-    
-    if session.state != 'waiting_btn_url':
-        return
-    
-    # Butonu ekle
-    session.buttons.append({
-        'text': session.temp_button_text,
-        'url': update.message.text
-    })
-    
-    # Temizle
-    del session.temp_button_text
-    session.state = None
-    
-    await update.message.reply_text(TEXTS['button_added'])
-    await show_main_panel(update, context)
+    elif data == "bc_back":
+        await show_main_panel(update, context)
 
 # ========== ÖNİZLEME ==========
-async def preview(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Önizleme göster"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = query.from_user.id
-    session = get_session(user_id)
-    
+async def preview_broadcast(query, session):
+    """Broadcast önizlemesi göster"""
     # Butonları oluştur
     keyboard = []
     for btn in session.buttons:
         keyboard.append([InlineKeyboardButton(btn['text'], url=btn['url'])])
     
     reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
-    
     preview_text = TEXTS['preview_title'] + session.get_summary()
     
     try:
@@ -306,22 +277,16 @@ async def preview(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         else:
             await query.message.reply_text(
-                preview_text,
+                text=preview_text,
                 reply_markup=reply_markup,
                 parse_mode='Markdown'
             )
     except Exception as e:
         await query.message.reply_text(f"❌ Preview error: {str(e)}")
 
-# ========== ONAY VE GÖNDERİM ==========
-async def confirm_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ========== ONAY ==========
+async def confirm_broadcast(query, session):
     """Gönderim onayı"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = query.from_user.id
-    session = get_session(user_id)
-    
     if not session.text and not session.photo and not session.video:
         await query.message.reply_text(TEXTS['no_content'])
         return
@@ -338,18 +303,16 @@ async def confirm_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(
-        TEXTS['confirm_send'].format(total_users),
+        text=TEXTS['confirm_send'].format(total_users),
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
 
-async def send_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ========== GÖNDERİM ==========
+async def send_broadcast_final(update: Update, context: ContextTypes.DEFAULT_TYPE, session):
     """Broadcast'i gönder"""
     query = update.callback_query
-    await query.answer()
-    
-    user_id = query.from_user.id
-    session = get_session(user_id)
+    await query.edit_message_text(TEXTS['sending'])
     
     # Butonları oluştur
     keyboard = []
@@ -358,19 +321,16 @@ async def send_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
     
+    # Tüm kullanıcılara gönder
     user_data = load_user_data()
-    user_ids = list(user_data.keys())
-    
-    await query.edit_message_text(TEXTS['sending'])
-    
     sent = 0
     failed = 0
     
-    for uid in user_ids:
+    for user_id in user_data.keys():
         try:
             if session.photo:
                 await context.bot.send_photo(
-                    chat_id=int(uid),
+                    chat_id=int(user_id),
                     photo=session.photo,
                     caption=session.text,
                     reply_markup=reply_markup,
@@ -378,7 +338,7 @@ async def send_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             elif session.video:
                 await context.bot.send_video(
-                    chat_id=int(uid),
+                    chat_id=int(user_id),
                     video=session.video,
                     caption=session.text,
                     reply_markup=reply_markup,
@@ -386,34 +346,29 @@ async def send_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             else:
                 await context.bot.send_message(
-                    chat_id=int(uid),
+                    chat_id=int(user_id),
                     text=session.text,
                     reply_markup=reply_markup,
                     parse_mode='Markdown'
                 )
             sent += 1
         except Exception as e:
-            print(f"Failed to {uid}: {e}")
+            print(f"Failed to send to {user_id}: {e}")
             failed += 1
     
-    session.reset()
-    
+    # Sonuç
     result = TEXTS['sent_success'].format(sent)
     if failed > 0:
         result += "\n" + TEXTS['sent_failed'].format(failed)
     
+    session.reset()
+    
     await query.edit_message_text(result)
     await show_main_panel(update, context)
 
-# ========== YARDIMCI FONKSİYONLAR ==========
-async def remove_last(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Son ekleneni sil"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = query.from_user.id
-    session = get_session(user_id)
-    
+# ========== SİLME ==========
+async def remove_last_item(session):
+    """Son eklenen öğeyi sil"""
     if session.buttons:
         session.buttons.pop()
     elif session.video:
@@ -422,95 +377,70 @@ async def remove_last(update: Update, context: ContextTypes.DEFAULT_TYPE):
         session.photo = None
     elif session.text:
         session.text = None
-    
-    await show_main_panel(update, context)
 
-async def clear_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Tümünü temizle"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = query.from_user.id
-    session = get_session(user_id)
-    session.reset()
-    
-    await show_main_panel(update, context)
-
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """İptal et"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = query.from_user.id
-    session = get_session(user_id)
-    session.reset()
-    
-    await query.edit_message_text(TEXTS['broadcast_cancelled'])
-
-# ========== BUTON İŞLEYİCİ ==========
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Tüm butonları işle"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = query.from_user.id
+# ========== MESAJ İŞLEYİCİ ==========
+async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin mesajlarını işle"""
+    user_id = update.effective_user.id
     
     if not is_admin(user_id):
-        await query.edit_message_text(TEXTS['admin_only'])
         return
     
-    data = query.data
+    session = get_session(user_id)
     
-    if data == "bc_add_text":
-        await add_text(update, context)
-    elif data == "bc_add_media":
-        await add_media(update, context)
-    elif data == "bc_add_button":
-        await add_button(update, context)
-    elif data == "bc_preview":
-        await preview(update, context)
-    elif data == "bc_confirm":
-        await confirm_send(update, context)
-    elif data == "bc_send_final":
-        await send_final(update, context)
-    elif data == "bc_remove_last":
-        await remove_last(update, context)
-    elif data == "bc_clear_all":
-        await clear_all(update, context)
-    elif data == "bc_cancel":
-        await cancel(update, context)
-    elif data == "bc_back":
+    # METİN EKLEME
+    if session.state == "waiting_text":
+        session.text = update.message.text
+        session.state = None
+        await update.message.reply_text(TEXTS['text_added'])
+        await show_main_panel(update, context)
+    
+    # MEDİA EKLEME
+    elif session.state == "waiting_media":
+        if update.message.photo:
+            session.photo = update.message.photo[-1].file_id
+        elif update.message.video:
+            session.video = update.message.video.file_id
+        
+        if update.message.caption:
+            session.text = update.message.caption
+        
+        session.state = None
+        await update.message.reply_text(TEXTS['media_added'])
+        await show_main_panel(update, context)
+    
+    # BUTON METNİ
+    elif session.state == "waiting_button_text":
+        session.temp_button_text = update.message.text
+        session.state = "waiting_button_url"
+        await update.message.reply_text(TEXTS['enter_button_url'])
+    
+    # BUTON URL'Sİ
+    elif session.state == "waiting_button_url":
+        if hasattr(session, 'temp_button_text'):
+            session.buttons.append({
+                'text': session.temp_button_text,
+                'url': update.message.text
+            })
+            session.temp_button_text = None
+        
+        session.state = None
+        await update.message.reply_text(TEXTS['button_added'])
         await show_main_panel(update, context)
 
 # ========== KURULUM ==========
 def setup(app):
     """Extension'ı kur"""
-    # Komut
+    # Komutlar
     app.add_handler(CommandHandler("settings", settings_command))
     
-    # Butonlar
+    # Buton işleyicisi
     app.add_handler(CallbackQueryHandler(button_handler, pattern="^bc_"))
     
-    # Mesajlar
+    # Mesaj işleyici (TEK TANE - hepsini tek fonksiyonda işle)
     app.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE,
-        handle_text
-    ))
-    app.add_handler(MessageHandler(
-        filters.PHOTO & filters.ChatType.PRIVATE,
-        handle_media
-    ))
-    app.add_handler(MessageHandler(
-        filters.VIDEO & filters.ChatType.PRIVATE,
-        handle_media
-    ))
-    app.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE,
-        handle_button_text
-    ))
-    app.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE,
-        handle_button_url
+        filters.TEXT | filters.PHOTO | filters.VIDEO,
+        message_handler
     ))
     
-    print("✅ Broadcast system loaded: /settings (English only, fixed)")
+    print("✅ Admin broadcast system loaded successfully!")
