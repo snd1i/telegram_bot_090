@@ -377,23 +377,32 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     print(f"🔘 Button clicked: {query.data}")  # Debug için
     
-    # 1. ÖNCE ADMIN BUTONLARINI KONTROL ET
-    if query.data.startswith('admin_') or query.data.startswith('broadcast_'):
+    # 1. ÖNCE BROADCAST BUTONLARINI KONTROL ET (YENİ)
+    if query.data.startswith('bc_'):
         try:
-            # admin.py'deki fonksiyonu çağır
-            from extensions.admin import admin_button_callback as admin_callback
-            await admin_callback(update, context)
-            return  # Burada işlem tamam, diğer kontrollere gitme
+            # admin.py'deki button_handler fonksiyonunu çağır
+            from extensions.admin import button_handler as broadcast_handler
+            await broadcast_handler(update, context)
+            return  # Burada işlem tamam
         except Exception as e:
-            print(f"❌ Admin button error: {e}")
-            # Hata durumunda kullanıcıya mesaj göster
+            print(f"❌ Broadcast button error: {e}")
             try:
-                await query.message.reply_text(f"⚠️ Admin panel error, please try again.")
+                await query.message.reply_text("⚠️ Broadcast system error. Please try /settings again.")
             except:
                 pass
             return
     
-    # 2. DİL BUTONLARI (lang_ku, lang_en, lang_ar)
+    # 2. ESKİ ADMIN BUTONLARI (artık kullanılmıyor ama yine de kontrol)
+    if query.data.startswith('admin_') or query.data.startswith('broadcast_'):
+        try:
+            # Eski admin sistemi
+            await query.message.reply_text("🔄 Please use the new /settings command for broadcasts.")
+            return
+        except Exception as e:
+            print(f"❌ Old admin error: {e}")
+            return
+    
+    # 3. DİL BUTONLARI (lang_ku, lang_en, lang_ar) - BU KISIM AYNI KALACAK
     if query.data.startswith('lang_'):
         # Önce erişim kontrolü
         has_access = await check_user_access(update, context)
@@ -417,7 +426,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_welcome_message(update, context, lang_code)
         return
     
-    # 3. DİL DEĞİŞTİRME BUTONU
+    # 4. DİL DEĞİŞTİRME BUTONU
     elif query.data == 'change_lang':
         # Önce erişim kontrolü
         has_access = await check_user_access(update, context)
@@ -428,7 +437,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_language_selection(update, context)
         return
     
-    # 4. YARDIM BUTONU
+    # 5. YARDIM BUTONU
     elif query.data == 'help':
         # Önce erişim kontrolü
         has_access = await check_user_access(update, context)
@@ -441,10 +450,23 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(lang_data['help_text'])
         return
     
-    # 5. TANIMLANMAMIŞ BUTON
+    # 6. TANIMLANMAMIŞ BUTON
     else:
         print(f"⚠️ Unknown button: {query.data}")
-        await query.message.reply_text("⚠️ This button is not functional yet.")
+        # BU SATIRI DEĞİŞTİR: Hata mesajı gösterme
+        # await query.message.reply_text("⚠️ This button is not functional yet.")
+        # YERİNE:
+        try:
+            # Tekrar broadcast butonu kontrol et
+            if query.data.startswith('bc_'):
+                from extensions.admin import button_handler as broadcast_handler
+                await broadcast_handler(update, context)
+            else:
+                # Bilinmeyen buton için sessizce görmezden gel
+                pass
+        except:
+            pass
+        return
 
 # ========== EKLENTİ YÜKLEYİCİ ==========
 def load_extensions(application):
