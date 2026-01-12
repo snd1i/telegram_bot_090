@@ -12,7 +12,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # YÖNETİCİ ID - KENDİ ID'Nİ YAZ!
-YONETICI_ID = 123456789  # BU NUMARAYI DEĞİŞTİR!
+YONETICI_ID = 5541236874  # BU NUMARAYI DEĞİŞTİR!
 
 # Kullanıcı verileri
 USER_DATA_FILE = "users.txt"
