@@ -9,6 +9,10 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+logger = logging.getLogger(__name__)
+
+# YÖNETİCİ ID - KENDİ ID'Nİ YAZ!
+YONETICI_ID = 123456789  # BU NUMARAYI DEĞİŞTİR!
 
 # Kullanıcı verileri
 USER_DATA_FILE = "users.txt"
@@ -36,193 +40,175 @@ def get_all_users():
         return []
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Kullanıcı başlattığında"""
+    """/start komutu"""
     user = update.effective_user
-    is_new = save_user(user.id)
-    
-    welcome_msg = f"""
-    🎉 **Hoş Geldin {user.first_name}!**
-    
-    🤖 **Duyuru Botu** - Yöneticilerden önemli duyurular alacaksın.
-    
-    📊 *{len(get_all_users())} kişi bu botu kullanıyor*
-    
-    {"✨ *Yeni kullanıcı kaydedildi!*" if is_new else ""}
-    
-    ✅ Başarıyla kaydedildin. Duyuruları bekleyin!
-    """
+    save_user(user.id)
     
     await update.message.reply_text(
-        welcome_msg,
+        f"🎉 Merhaba {user.first_name}!\n\n"
+        f"Duyuru botuna hoş geldin. Önemli duyurular buradan iletilecek.\n\n"
+        f"✅ Başarıyla kayıt oldun!",
         parse_mode=ParseMode.MARKDOWN
     )
 
 async def duyuru(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Yönetici: Duyuru gönderme komutu"""
-    # YÖNETİCİ ID - DEĞİŞTİRMEN GEREKECEK!
-    YONETICI_ID = 123456789  # BU NUMARAYI KENDİ ID'NLE DEĞİŞTİR
-    
+    """Yönetici: /duyuru komutu"""
     if update.effective_user.id != YONETICI_ID:
-        await update.message.reply_text("⛔ Bu komutu sadece yöneticiler kullanabilir.")
+        await update.message.reply_text("⛔ Yetkiniz yok!")
         return
     
-    help_text = """
-    📢 **DUYURU FORMATI**
-    
-    Aşağıdaki gibi mesaj gönder:
-    
-    ```
-    BAŞLIK: Önemli Duyuru!
-    METİN: Değerli kullanıcılarımız, yeni güncelleme...
-    RESİM: https://örnek.com/resim.jpg
-    BUTON: Detaylar - https://site.com
-    ```
-    
-    *Notlar:*
-    • RESİM ve BUTON isteğe bağlı
-    • Her satır başı büyük harfle başlamalı
-    • Resim URL'si doğrudan erişilebilir olmalı
-    """
-    
-    await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(
+        "📢 **DUYURU GÖNDER**\n\n"
+        "Şu formatta mesaj gönder:\n\n"
+        "*Başlık*\nMetin\n*Resim:* https://...\n*Buton:* Yazı - https://...\n\n"
+        "Örnek:\n"
+        "Yeni Güncelleme!\n"
+        "Merhaba, yeni özellikler eklendi.\n"
+        "*Resim:* https://i.imgur.com/abc123.jpg\n"
+        "*Buton:* Detaylar - https://site.com",
+        parse_mode=ParseMode.MARKDOWN
+    )
 
-async def handle_duyuru_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Duyuru mesajını işle"""
-    YONETICI_ID = 123456789  # BU NUMARAYI KENDİ ID'NLE DEĞİŞTİR
+async def istatistik(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/istatistik komutu"""
+    if update.effective_user.id != YONETICI_ID:
+        await update.message.reply_text("⛔ Yetkiniz yok!")
+        return
     
+    users = get_all_users()
+    await update.message.reply_text(
+        f"📊 **İstatistikler**\n\n"
+        f"👥 Toplam Kullanıcı: {len(users)}\n"
+        f"🆔 Yönetici ID: {YONETICI_ID}\n"
+        f"🤖 Bot: @{context.bot.username if context.bot.username else 'bilinmiyor'}",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+async def handle_duyuru(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Duyuru mesajını işle"""
     if update.effective_user.id != YONETICI_ID:
         return
     
     text = update.message.text
     
-    if not text.startswith("BAŞLIK:"):
+    # Başlık ve metni ayır
+    lines = text.split('\n')
+    if len(lines) < 2:
+        await update.message.reply_text("❌ Geçersiz format! En az 2 satır olmalı.")
         return
     
-    # Mesajı parse et
-    lines = text.split('\n')
-    data = {}
+    baslik = lines[0].strip()
+    metin = lines[1].strip()
     
-    for line in lines:
-        if ':' in line:
-            key, value = line.split(':', 1)
-            data[key.strip()] = value.strip()
+    # Resim ve butonları bul
+    resim_url = None
+    buton_text = None
+    buton_url = None
+    
+    for line in lines[2:]:
+        line = line.strip()
+        if line.lower().startswith("*resim:*"):
+            resim_url = line.replace("*Resim:*", "").replace("*resim:*", "").strip()
+        elif line.lower().startswith("*buton:*"):
+            buton_part = line.replace("*Buton:*", "").replace("*buton:*", "").strip()
+            if " - " in buton_part:
+                buton_text, buton_url = buton_part.split(" - ", 1)
     
     # Buton oluştur
     keyboard = None
-    if 'BUTON' in data and '-' in data['BUTON']:
-        btn_text, btn_url = data['BUTON'].split('-', 1)
-        keyboard = [[InlineKeyboardButton(
-            btn_text.strip(),
-            url=btn_url.strip()
-        )]]
+    if buton_text and buton_url:
+        keyboard = [[InlineKeyboardButton(buton_text.strip(), url=buton_url.strip())]]
     
-    # Tüm kullanıcılara gönder
+    # Mesajı hazırla
+    mesaj = f"📢 **{baslik}**\n\n{metin}"
+    
+    # Kullanıcılara gönder
     users = get_all_users()
-    success = 0
-    failed = 0
+    basarili = 0
     
     for user_id in users:
         try:
-            message_text = f"📢 **{data.get('BAŞLIK', 'Duyuru')}**\n\n{data.get('METİN', '')}"
-            
-            if 'RESİM' in data and data['RESİM'].startswith('http'):
-                # Resimli mesaj
+            if resim_url and resim_url.startswith("http"):
                 await context.bot.send_photo(
                     chat_id=user_id,
-                    photo=data['RESİM'],
-                    caption=message_text,
+                    photo=resim_url,
+                    caption=mesaj,
                     parse_mode=ParseMode.MARKDOWN,
                     reply_markup=InlineKeyboardMarkup(keyboard) if keyboard else None
                 )
             else:
-                # Sadece metin
                 await context.bot.send_message(
                     chat_id=user_id,
-                    text=message_text,
+                    text=mesaj,
                     parse_mode=ParseMode.MARKDOWN,
                     reply_markup=InlineKeyboardMarkup(keyboard) if keyboard else None
                 )
-            success += 1
-        except Exception as e:
-            failed += 1
-            logging.error(f"Kullanıcı {user_id}: {e}")
+            basarili += 1
+        except:
+            continue
     
-    # Rapor gönder
     await update.message.reply_text(
-        f"✅ **Duyuru Tamamlandı!**\n\n"
-        f"✅ Başarılı: {success} kişi\n"
-        f"❌ Başarısız: {failed} kişi\n"
-        f"📊 Toplam: {len(users)} kullanıcı"
+        f"✅ Duyuru gönderildi!\n"
+        f"✅ {basarili}/{len(users)} kişiye iletildi",
+        parse_mode=ParseMode.MARKDOWN
     )
 
-async def istatistik(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """İstatistikleri göster"""
-    YONETICI_ID = 123456789  # BU NUMARAYI KENDİ ID'NLE DEĞİŞTİR
-    
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Hızlı duyuru /broadcast"""
     if update.effective_user.id != YONETICI_ID:
         return
+    
+    if not context.args:
+        await update.message.reply_text("Kullanım: /broadcast mesajınız")
+        return
+    
+    mesaj = " ".join(context.args)
     
     users = get_all_users()
+    basarili = 0
     
-    stats = f"""
-    📊 **BOT İSTATİSTİKLERİ**
+    for user_id in users:
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=f"📢 {mesaj}",
+                parse_mode=ParseMode.MARKDOWN
+            )
+            basarili += 1
+        except:
+            continue
     
-    👥 Toplam Kullanıcı: {len(users)}
-    🆔 Yönetici ID: {YONETICI_ID}
-    🤖 Bot: @{context.bot.username}
-    
-    *Son 5 Kullanıcı ID:*
-    """
-    
-    for user_id in users[-5:]:
-        stats += f"\n• `{user_id}`"
-    
-    await update.message.reply_text(stats, parse_mode=ParseMode.MARKDOWN)
-
-async def test_duyuru(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Test duyurusu gönder"""
-    YONETICI_ID = 123456789  # BU NUMARAYI KENDİ ID'NLE DEĞİŞTİR
-    
-    if update.effective_user.id != YONETICI_ID:
-        return
-    
-    # Kendine test mesajı gönder
-    test_message = """
-    BAŞLIK: ✅ Test Duyurusu
-    METİN: Bu bir test duyurusudur. Bot çalışıyor!
-    RESİM: https://images.unsplash.com/photo-1611224923853-80b023f02d71
-    BUTON: GitHub - https://github.com
-    """
-    
-    await handle_duyuru_message(update, context)
+    await update.message.reply_text(f"✅ {basarili} kişiye gönderildi")
 
 def main():
     """Botu başlat"""
-    # BOT TOKEN - Railway'da ayarlayacaksın
+    # Token'ı al
     BOT_TOKEN = os.environ.get("BOT_TOKEN")
     
     if not BOT_TOKEN:
-        logging.error("BOT_TOKEN bulunamadı!")
+        logger.error("❌ BOT_TOKEN bulunamadı! Railway'da ayarladın mı?")
         return
     
+    logger.info(f"🤖 Bot başlatılıyor... Yönetici ID: {YONETICI_ID}")
+    
     # Uygulamayı oluştur
-    application = Application.builder().token(BOT_TOKEN).build()
+    app = Application.builder().token(BOT_TOKEN).build()
     
     # Komutlar
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("duyuru", duyuru))
-    application.add_handler(CommandHandler("istatistik", istatistik))
-    application.add_handler(CommandHandler("test", test_duyuru))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("duyuru", duyuru))
+    app.add_handler(CommandHandler("istatistik", istatistik))
+    app.add_handler(CommandHandler("broadcast", broadcast))
     
     # Duyuru mesaj handler
-    application.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND,
-        handle_duyuru_message
+    app.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND & filters.User(YONETICI_ID),
+        handle_duyuru
     ))
     
     # Botu başlat
-    logging.info("Bot başlatılıyor...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    logger.info("🚀 Bot çalışıyor...")
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
