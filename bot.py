@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import os
 import logging
-from telegram import Update, ParseMode
+from telegram import Update
+from telegram.constants import ParseMode
 from telegram.ext import Updater, CommandHandler, CallbackContext
 
 # Log ayarları
@@ -26,6 +27,8 @@ def start(update: Update, context: CallbackContext):
 🤖 Bot başarıyla çalışıyor.
     
 🚀 Her şey hazır!
+
+📅 Test Tarihi: 2024
     """
     
     update.message.reply_text(
@@ -35,6 +38,11 @@ def start(update: Update, context: CallbackContext):
     
     logger.info(f"Yeni kullanıcı: {user.id} - {user.first_name}")
 
+def ping(update: Update, context: CallbackContext):
+    """Bot'un çalışıp çalışmadığını test et"""
+    update.message.reply_text("🏓 Pong! Bot aktif!")
+    logger.info("Ping komutu çalıştı")
+
 def main():
     """Botu başlat"""
     if not BOT_TOKEN:
@@ -43,23 +51,27 @@ def main():
         return
     
     logger.info("🤖 Bot başlatılıyor...")
+    logger.info(f"📦 Kullanılan sürüm: python-telegram-bot==13.15")
     
     try:
         # Updater oluştur
         updater = Updater(token=BOT_TOKEN, use_context=True)
+        dispatcher = updater.dispatcher
         
         # Komutları ekle
-        updater.dispatcher.add_handler(CommandHandler("start", start))
+        dispatcher.add_handler(CommandHandler("start", start))
+        dispatcher.add_handler(CommandHandler("ping", ping))
         
         # Botu başlat
         updater.start_polling()
-        logger.info("🚀 Bot başladı! /start komutunu test et")
+        logger.info("🚀 Bot başladı! /start ve /ping komutlarını test et")
+        logger.info("✅ ParseMode sorunu çözüldü")
         
         # Botu çalışır tut
         updater.idle()
         
     except Exception as e:
-        logger.error(f"❌ Hata: {e}")
+        logger.error(f"❌ Hata: {str(e)}")
 
 if __name__ == "__main__":
     main()
