@@ -1,9 +1,8 @@
-# extensions/admin.py - GÜNCELLENMİŞ VERSİYON
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFile
+# extensions/admin.py - SADECE PROFESYONEL DUYURU SİSTEMİ
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 import json
 import os
-from io import BytesIO
 
 # ========== DOSYA İŞLEMLERİ ==========
 def load_config():
@@ -32,484 +31,645 @@ def is_admin(user_id):
     config = load_config()
     return str(user_id) == config.get('admin_id', "5541236874")
 
-def save_broadcast_data(data):
-    """Duyuru verilerini kaydet"""
-    with open('broadcast_data.json', 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-def load_broadcast_data():
-    """Duyuru verilerini yükle"""
-    try:
-        with open('broadcast_data.json', 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except:
-        return {"broadcasts": []}
-
 # ========== DİL MESAJLARI ==========
-ADMIN_TEXTS = {
+BROADCAST_TEXTS = {
     'ku': {
         'admin_only': "❌ تەنیا بەڕێوەبەر دەتوانێت ئەم فرمانە بەکاربهێنێت!",
-        'panel_title': "👑 **پانێلی بەڕێوەبەری**\n\nخوارەوە دوگمەیەک هەڵبژێرە:",
-        'broadcast_title': "📢 **ناردنی بڵاوکراوە**\n\nناردنی بڵاوکراوە\n\nتکایە پەیامێک بنێرە یان وێنە یان ڤیدیۆ:\n• دەتوانیت دەق بنووسیت\n• دەتوانیت وێنە یان ڤیدیۆ باربکەیت\n• دەتوانیت دوگمە زیاد بکەیت\n\nدوای ئەوەی هەموو شتێکت زیاد کرد، دوگمەی 'ناردن' بکلیک بکە.",
-        'edit_help': "🔄 **دەستکاری پەیامی یارمەتی**\n\nئەم تایبەتمەندیە لە پەرەپێداندایە.\nبەم زووانە بەردەست دەبێت.",
-        'app_settings': "📱 **ڕێکخستنەکانی ئەپ**\n\nتایبەتمەندیەکانی ئەپ بەم زووانە زیاد دەکرێن.",
-        'stats_title': "📊 **ئامارەکانی بۆت**",
-        'bot_settings': "⚙️ **ڕێکخستنەکانی بۆت**",
-        'total_users': "👥 کۆی بەکارهێنەران:",
-        'lang_dist': "🌍 **دابەشکاری زمان:**",
-        'channel': "📢 کەناڵ:",
-        'invite_link': "🔗 پەیوەندی بانگهێشتکردن:",
-        'required_sub': "📌 ئەندامێتی ناچاری:",
-        'on': "✅ چالاکە",
-        'off': "❌ ناچالاکە",
+        'panel_title': "📢 **ناردنی بڵاوکراوە**\n\nخوارەوە دوگمەیەک هەڵبژێرە:",
+        'broadcast_created': "✅ بڵاوکراوە دروست کرا! ئێستا دەتوانیت:",
+        'add_text': "📝 زیادکردنی دەق",
+        'add_media': "🖼️ زیادکردنی وێنە/ڤیدیۆ",
+        'add_button': "🔘 زیادکردنی دوگمە",
+        'preview': "👁️ بینینی پێشوەخت",
+        'send': "📤 ناردن بۆ هەموو کەس",
         'back': "🔙 گەڕانەوە",
-        'send_broadcast': "📤 ناردنی بڵاوکراوە",
-        'add_button': "➕ زیادکردنی دوگمە",
-        'cancel': "✖️ پاشگەزبوونەوە",
-        'broadcast_sent': "✅ بڵاوکراوە نێردرا بۆ {} کەس!",
-        'enter_button_text': "📝 دەقی دوگمە بنووسە:",
+        'cancel': "✖️ هەڵوەشاندنەوە",
+        'enter_text': "📝 دەقی بڵاوکراوە بنووسە:",
+        'text_added': "✅ دەق زیاد کرا!",
+        'send_photo_video': "🖼️ وێنە یان ڤیدیۆ باربکە:",
+        'media_added': "✅ وێنە/ڤیدیۆ زیاد کرا!",
+        'enter_button_text': "🔘 دەقی دوگمە بنووسە:",
         'enter_button_url': "🔗 لینکی دوگمە بنووسە:",
         'button_added': "✅ دوگمە زیاد کرا!",
-        'no_content': "⚠️ هیچ ناوەڕۆکێک نییە بۆ ناردن!",
-        'broadcast_preview': "👁️ **پێشبینینی بڵاوکراوە**\n\n{}"
+        'preview_title': "👁️ **پێشبینینی بڵاوکراوە**\n\n",
+        'no_content': "⚠️ هیچ ناوەڕۆکێک نییە!",
+        'sending': "🔄 ناردن...",
+        'sent_success': "✅ بڵاوکراوە نێردرا بۆ {} کەس!",
+        'sent_failed': "❌ بە {} کەس نەگەیشت.",
+        'current_content': "📋 **ناوەڕۆکی ئێستا:**\n",
+        'text_content': "📝 دەق: {}\n",
+        'media_content': "🖼️ میدیا: {}",
+        'buttons_content': "🔘 دوگمەکان: {}",
+        'remove_last': "🗑️ سڕینەوەی دوایین",
+        'clear_all': "🧹 پاککردنەوەی هەموو",
+        'confirm_send': "⚠️ **دڵنیای لە ناردن؟**\n\nبڵاوکراوە بۆ هەموو کەس نێردرێت.\n\n{} کەس گەیشتەت.",
+        'yes_send': "✅ بەڵێ، بنێرە",
+        'no_cancel': "❌ نەخێر، هەڵبوەشێنە"
     },
     'en': {
         'admin_only': "❌ Only admin can use this command!",
-        'panel_title': "👑 **Admin Panel**\n\nSelect a button below:",
-        'broadcast_title': "📢 **Send Broadcast**\n\nBroadcast Sending\n\nPlease send a message, photo or video:\n• You can write text\n• You can upload photo or video\n• You can add buttons\n\nAfter adding everything, click the 'Send' button.",
-        'edit_help': "🔄 **Edit Help Message**\n\nThis feature is under development.\nWill be available soon.",
-        'app_settings': "📱 **App Settings**\n\nApp features will be added soon.",
-        'stats_title': "📊 **Bot Statistics**",
-        'bot_settings': "⚙️ **Bot Settings**",
-        'total_users': "👥 Total Users:",
-        'lang_dist': "🌍 **Language Distribution:**",
-        'channel': "📢 Channel:",
-        'invite_link': "🔗 Invite Link:",
-        'required_sub': "📌 Required Subscription:",
-        'on': "✅ ON",
-        'off': "❌ OFF",
+        'panel_title': "📢 **Send Broadcast**\n\nSelect an option below:",
+        'broadcast_created': "✅ Broadcast created! Now you can:",
+        'add_text': "📝 Add Text",
+        'add_media': "🖼️ Add Photo/Video",
+        'add_button': "🔘 Add Button",
+        'preview': "👁️ Preview",
+        'send': "📤 Send to Everyone",
         'back': "🔙 Back",
-        'send_broadcast': "📤 Send Broadcast",
-        'add_button': "➕ Add Button",
         'cancel': "✖️ Cancel",
-        'broadcast_sent': "✅ Broadcast sent to {} people!",
-        'enter_button_text': "📝 Enter button text:",
+        'enter_text': "📝 Enter broadcast text:",
+        'text_added': "✅ Text added!",
+        'send_photo_video': "🖼️ Send photo or video:",
+        'media_added': "✅ Photo/video added!",
+        'enter_button_text': "🔘 Enter button text:",
         'enter_button_url': "🔗 Enter button URL:",
         'button_added': "✅ Button added!",
-        'no_content': "⚠️ No content to send!",
-        'broadcast_preview': "👁️ **Broadcast Preview**\n\n{}"
+        'preview_title': "👁️ **Broadcast Preview**\n\n",
+        'no_content': "⚠️ No content yet!",
+        'sending': "🔄 Sending...",
+        'sent_success': "✅ Broadcast sent to {} people!",
+        'sent_failed': "❌ Failed to reach {} people.",
+        'current_content': "📋 **Current Content:**\n",
+        'text_content': "📝 Text: {}\n",
+        'media_content': "🖼️ Media: {}",
+        'buttons_content': "🔘 Buttons: {}",
+        'remove_last': "🗑️ Remove Last",
+        'clear_all': "🧹 Clear All",
+        'confirm_send': "⚠️ **Confirm Send?**\n\nBroadcast will be sent to everyone.\n\n{} people will receive it.",
+        'yes_send': "✅ Yes, Send",
+        'no_cancel': "❌ No, Cancel"
     },
     'ar': {
         'admin_only': "❌ فقط المدير يمكنه استخدام هذا الأمر!",
-        'panel_title': "👑 **لوحة المدير**\n\nاختر زرًا أدناه:",
-        'broadcast_title': "📢 **إرسال بث**\n\nإرسال البث\n\nالرجاء إرسال رسالة أو صورة أو فيديو:\n• يمكنك كتابة نص\n• يمكنك تحميل صورة أو فيديو\n• يمكنك إضافة أزرار\n\nبعد إضافة كل شيء، انقر على زر 'إرسال'.",
-        'edit_help': "🔄 **تحرير رسالة المساعدة**\n\nهذه الميزة قيد التطوير.\nستكون متاحة قريبًا.",
-        'app_settings': "📱 **إعدادات التطبيق**\n\nستتم إضافة ميزات التطبيق قريبًا.",
-        'stats_title': "📊 **إحصائيات البوت**",
-        'bot_settings': "⚙️ **إعدادات البوت**",
-        'total_users': "👥 إجمالي المستخدمين:",
-        'lang_dist': "🌍 **توزيع اللغة:**",
-        'channel': "📢 القناة:",
-        'invite_link': "🔗 رابط الدعوة:",
-        'required_sub': "📌 الاشتراك المطلوب:",
-        'on': "✅ مفعل",
-        'off': "❌ معطل",
+        'panel_title': "📢 **إرسال بث**\n\nاختر خيارًا أدناه:",
+        'broadcast_created': "✅ تم إنشاء البث! الآن يمكنك:",
+        'add_text': "📝 إضافة نص",
+        'add_media': "🖼️ إضافة صورة/فيديو",
+        'add_button': "🔘 إضافة زر",
+        'preview': "👁️ معاينة",
+        'send': "📤 إرسال للجميع",
         'back': "🔙 رجوع",
-        'send_broadcast': "📤 إرسال البث",
-        'add_button': "➕ إضافة زر",
         'cancel': "✖️ إلغاء",
-        'broadcast_sent': "✅ تم إرسال البث إلى {} شخص!",
-        'enter_button_text': "📝 أدخل نص الزر:",
+        'enter_text': "📝 أدخل نص البث:",
+        'text_added': "✅ تمت إضافة النص!",
+        'send_photo_video': "🖼️ أرسل صورة أو فيديو:",
+        'media_added': "✅ تمت إضافة الصورة/الفيديو!",
+        'enter_button_text': "🔘 أدخل نص الزر:",
         'enter_button_url': "🔗 أدخل رابط الزر:",
         'button_added': "✅ تمت إضافة الزر!",
-        'no_content': "⚠️ لا يوجد محتوى للإرسال!",
-        'broadcast_preview': "👁️ **معاينة البث**\n\n{}"
+        'preview_title': "👁️ **معاينة البث**\n\n",
+        'no_content': "⚠️ لا يوجد محتوى بعد!",
+        'sending': "🔄 جاري الإرسال...",
+        'sent_success': "✅ تم إرسال البث إلى {} شخص!",
+        'sent_failed': "❌ فشل في الوصول إلى {} شخص.",
+        'current_content': "📋 **المحتوى الحالي:**\n",
+        'text_content': "📝 النص: {}\n",
+        'media_content': "🖼️ الوسائط: {}",
+        'buttons_content': "🔘 الأزرار: {}",
+        'remove_last': "🗑️ حذف الأخير",
+        'clear_all': "🧹 مسح الكل",
+        'confirm_send': "⚠️ **تأكيد الإرسال؟**\n\nسيتم إرسال البث للجميع.\n\n{} شخص سيستلمه.",
+        'yes_send': "✅ نعم، أرسل",
+        'no_cancel': "❌ لا، ألغي"
     }
 }
 
-BUTTON_TEXTS = {
-    'ku': {
-        'broadcast': "📝 ناردنی بڵاوکراوە",
-        'edit_help': "🔄 دەستکاری پەیامی یارمەتی",
-        'app_settings': "📱 ڕێکخستنەکانی ئەپ",
-        'stats': "📊 ئامارەکان",
-        'bot_settings': "⚙️ ڕێکخستنەکانی بۆت",
-    },
-    'en': {
-        'broadcast': "📝 Send Broadcast",
-        'edit_help': "🔄 Edit Help Message",
-        'app_settings': "📱 App Settings",
-        'stats': "📊 Statistics",
-        'bot_settings': "⚙️ Bot Settings",
-    },
-    'ar': {
-        'broadcast': "📝 إرسال بث",
-        'edit_help': "🔄 تحرير رسالة المساعدة",
-        'app_settings': "📱 إعدادات التطبيق",
-        'stats': "📊 الإحصائيات",
-        'bot_settings': "⚙️ إعدادات البوت",
-    }
-}
+# ========== GLOBAL BROADCAST DATA ==========
+# Her admin için broadcast verisi saklar
+broadcast_sessions = {}
 
-LANG_NAMES = {
-    'ku': {'ku': 'کوردی', 'en': 'ئینگلیزی', 'ar': 'عەرەبی'},
-    'en': {'ku': 'Kurdish', 'en': 'English', 'ar': 'Arabic'},
-    'ar': {'ku': 'الكردية', 'en': 'الإنجليزية', 'ar': 'العربية'}
-}
+class BroadcastSession:
+    """Broadcast oturumu yönetimi"""
+    def __init__(self, user_id):
+        self.user_id = str(user_id)
+        self.text = None
+        self.photo = None
+        self.video = None
+        self.buttons = []
+        self.state = None  # 'waiting_text', 'waiting_media', 'waiting_button_text', 'waiting_button_url'
+    
+    def get_content_summary(self, lang='en'):
+        """İçerik özetini getir"""
+        texts = BROADCAST_TEXTS[lang]
+        summary = texts['current_content']
+        
+        if self.text:
+            summary += texts['text_content'].format(self.text[:50] + ("..." if len(self.text) > 50 else ""))
+        
+        if self.photo:
+            summary += texts['media_content'].format("📷 Photo")
+        elif self.video:
+            summary += texts['media_content'].format("🎬 Video")
+        
+        if self.buttons:
+            button_texts = [btn['text'] for btn in self.buttons]
+            summary += texts['buttons_content'].format(", ".join(button_texts))
+        
+        if not self.text and not self.photo and not self.video:
+            summary = texts['no_content']
+        
+        return summary
+    
+    def reset(self):
+        """Oturumu sıfırla"""
+        self.text = None
+        self.photo = None
+        self.video = None
+        self.buttons = []
+        self.state = None
 
-# Duyuru verilerini saklamak için global değişken
-user_broadcast_data = {}
+def get_session(user_id):
+    """Kullanıcı için broadcast oturumu al"""
+    user_id_str = str(user_id)
+    if user_id_str not in broadcast_sessions:
+        broadcast_sessions[user_id_str] = BroadcastSession(user_id)
+    return broadcast_sessions[user_id_str]
 
 # ========== /settings KOMUTU ==========
 async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Dil destekli admin paneli"""
+    """Sadece broadcast sistemi"""
     user_id = update.effective_user.id
     
     if not is_admin(user_id):
         user_lang = get_user_lang(user_id)
-        await update.message.reply_text(ADMIN_TEXTS[user_lang]['admin_only'])
+        await update.message.reply_text(BROADCAST_TEXTS[user_lang]['admin_only'])
         return
     
-    user_lang = get_user_lang(user_id)
-    texts = ADMIN_TEXTS[user_lang]
-    buttons = BUTTON_TEXTS[user_lang]
-    
-    # Admin paneli butonları
-    keyboard = [
-        [InlineKeyboardButton(buttons['broadcast'], callback_data="admin_broadcast")],
-        [InlineKeyboardButton(buttons['edit_help'], callback_data="admin_edit_help")],
-        [InlineKeyboardButton(buttons['app_settings'], callback_data="admin_app_settings")],
-        [InlineKeyboardButton(buttons['stats'], callback_data="admin_stats")],
-        [InlineKeyboardButton(buttons['bot_settings'], callback_data="admin_bot_settings")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.message.reply_text(texts['panel_title'], reply_markup=reply_markup, parse_mode='Markdown')
-
-# ========== DÜYURU SİSTEMİ ==========
-async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Duyuru oluşturmaya başla"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = str(query.from_user.id)
-    user_lang = get_user_lang(user_id)
-    texts = ADMIN_TEXTS[user_lang]
-    
-    # Kullanıcının duyuru verilerini sıfırla
-    user_broadcast_data[user_id] = {
-        'text': None,
-        'photo': None,
-        'video': None,
-        'buttons': [],
-        'state': 'waiting_content'
-    }
-    
-    keyboard = [
-        [InlineKeyboardButton(texts['cancel'], callback_data="admin_back")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await query.edit_message_text(texts['broadcast_title'], reply_markup=reply_markup, parse_mode='Markdown')
-
-async def handle_broadcast_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Duyuru içeriğini işle"""
-    user_id = str(update.effective_user.id)
-    
-    if user_id not in user_broadcast_data:
-        return
+    # Oturumu sıfırla
+    session = get_session(user_id)
+    session.reset()
     
     user_lang = get_user_lang(user_id)
-    texts = ADMIN_TEXTS[user_lang]
+    texts = BROADCAST_TEXTS[user_lang]
     
-    # Mesaj tipine göre işle
-    if update.message.text:
-        # Metin mesajı
-        user_broadcast_data[user_id]['text'] = update.message.text
-        await update.message.reply_text(f"✅ {texts['button_added']}\n\n{texts['add_button']} / {texts['send_broadcast']}")
-        
-    elif update.message.photo:
-        # Fotoğraf
-        photo = update.message.photo[-1]  # En yüksek çözünürlüklü
-        user_broadcast_data[user_id]['photo'] = photo.file_id
-        caption = update.message.caption or ""
-        user_broadcast_data[user_id]['text'] = caption
-        await update.message.reply_text(f"✅ {texts['button_added']}\n\n{texts['add_button']} / {texts['send_broadcast']}")
-        
-    elif update.message.video:
-        # Video
-        video = update.message.video
-        user_broadcast_data[user_id]['video'] = video.file_id
-        caption = update.message.caption or ""
-        user_broadcast_data[user_id]['text'] = caption
-        await update.message.reply_text(f"✅ {texts['button_added']}\n\n{texts['add_button']} / {texts['send_broadcast']}")
-    
-    # Buton ekleme veya gönderme seçenekleri
+    # Ana broadcast paneli
     keyboard = [
+        [InlineKeyboardButton(texts['add_text'], callback_data="broadcast_add_text")],
+        [InlineKeyboardButton(texts['add_media'], callback_data="broadcast_add_media")],
+        [InlineKeyboardButton(texts['add_button'], callback_data="broadcast_add_button")],
         [
-            InlineKeyboardButton(texts['add_button'], callback_data="broadcast_add_button"),
-            InlineKeyboardButton(texts['send_broadcast'], callback_data="broadcast_send")
+            InlineKeyboardButton(texts['preview'], callback_data="broadcast_preview"),
+            InlineKeyboardButton(texts['send'], callback_data="broadcast_confirm_send")
         ],
-        [InlineKeyboardButton(texts['cancel'], callback_data="admin_back")]
+        [
+            InlineKeyboardButton(texts['remove_last'], callback_data="broadcast_remove_last"),
+            InlineKeyboardButton(texts['clear_all'], callback_data="broadcast_clear_all")
+        ],
+        [InlineKeyboardButton(texts['cancel'], callback_data="broadcast_cancel")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await update.message.reply_text(texts['broadcast_preview'].format(
-        user_broadcast_data[user_id]['text'] or texts['no_content']
-    ), reply_markup=reply_markup, parse_mode='Markdown')
+    await update.message.reply_text(
+        texts['panel_title'] + "\n\n" + session.get_content_summary(user_lang),
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
 
-async def add_broadcast_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Duyuruya buton ekle"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = str(query.from_user.id)
-    user_lang = get_user_lang(user_id)
-    texts = ADMIN_TEXTS[user_lang]
-    
-    # Buton ekleme durumuna geç
-    user_broadcast_data[user_id]['state'] = 'waiting_button_text'
-    
-    await query.message.reply_text(texts['enter_button_text'])
-
-async def handle_button_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Buton metnini al"""
-    user_id = str(update.effective_user.id)
-    
-    if user_id not in user_broadcast_data or user_broadcast_data[user_id]['state'] != 'waiting_button_text':
-        return
-    
-    user_lang = get_user_lang(user_id)
-    texts = ADMIN_TEXTS[user_lang]
-    
-    button_text = update.message.text
-    user_broadcast_data[user_id]['button_temp'] = {'text': button_text}
-    user_broadcast_data[user_id]['state'] = 'waiting_button_url'
-    
-    await update.message.reply_text(texts['enter_button_url'])
-
-async def handle_button_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Buton URL'sini al"""
-    user_id = str(update.effective_user.id)
-    
-    if user_id not in user_broadcast_data or user_broadcast_data[user_id]['state'] != 'waiting_button_url':
-        return
-    
-    user_lang = get_user_lang(user_id)
-    texts = ADMIN_TEXTS[user_lang]
-    
-    button_url = update.message.text
-    button_text = user_broadcast_data[user_id]['button_temp']['text']
-    
-    # Butonu ekle
-    user_broadcast_data[user_id]['buttons'].append({
-        'text': button_text,
-        'url': button_url
-    })
-    
-    # Geçici veriyi temizle
-    del user_broadcast_data[user_id]['button_temp']
-    user_broadcast_data[user_id]['state'] = 'waiting_content'
-    
-    await update.message.reply_text(texts['button_added'])
-
-async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Duyuruyu gönder"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = str(query.from_user.id)
-    
-    if user_id not in user_broadcast_data:
-        await query.message.reply_text("❌ No broadcast data found!")
-        return
-    
-    user_lang = get_user_lang(user_id)
-    texts = ADMIN_TEXTS[user_lang]
-    
-    data = user_broadcast_data[user_id]
-    
-    if not data['text'] and not data['photo'] and not data['video']:
-        await query.message.reply_text(texts['no_content'])
-        return
-    
-    # Tüm kullanıcıları al
-    user_data = load_user_data()
-    user_ids = list(user_data.keys())
-    
-    # Butonları oluştur
-    keyboard = []
-    for btn in data['buttons']:
-        keyboard.append([InlineKeyboardButton(btn['text'], url=btn['url'])])
-    
-    reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
-    
-    # Gönderim sayacı
-    sent_count = 0
-    
-    # Her kullanıcıya gönder
-    for uid in user_ids:
-        try:
-            if data['photo']:
-                await context.bot.send_photo(
-                    chat_id=uid,
-                    photo=data['photo'],
-                    caption=data['text'] or "",
-                    reply_markup=reply_markup,
-                    parse_mode='Markdown'
-                )
-            elif data['video']:
-                await context.bot.send_video(
-                    chat_id=uid,
-                    video=data['video'],
-                    caption=data['text'] or "",
-                    reply_markup=reply_markup,
-                    parse_mode='Markdown'
-                )
-            else:
-                await context.bot.send_message(
-                    chat_id=uid,
-                    text=data['text'],
-                    reply_markup=reply_markup,
-                    parse_mode='Markdown'
-                )
-            sent_count += 1
-        except Exception as e:
-            print(f"Failed to send to {uid}: {e}")
-            continue
-    
-    # Veriyi temizle
-    del user_broadcast_data[user_id]
-    
-    await query.message.reply_text(texts['broadcast_sent'].format(sent_count))
-
-# ========== BUTON İŞLEMLERİ ==========
-async def admin_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin butonlarını işle"""
+# ========== METİN EKLEME ==========
+async def add_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Metin ekleme işlemi"""
     query = update.callback_query
     await query.answer()
     
     user_id = query.from_user.id
     user_lang = get_user_lang(user_id)
-    texts = ADMIN_TEXTS[user_lang]
-    buttons = BUTTON_TEXTS[user_lang]
+    texts = BROADCAST_TEXTS[user_lang]
     
-    if not is_admin(user_id):
-        await query.edit_message_text(texts['admin_only'])
+    session = get_session(user_id)
+    session.state = 'waiting_text'
+    
+    await query.message.reply_text(texts['enter_text'])
+
+async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Metin girdisini işle"""
+    user_id = update.effective_user.id
+    session = get_session(user_id)
+    
+    if session.state != 'waiting_text':
         return
     
-    if query.data == "admin_broadcast":
-        # Duyuru gönderim paneli
-        await start_broadcast(update, context)
+    user_lang = get_user_lang(user_id)
+    texts = BROADCAST_TEXTS[user_lang]
     
-    elif query.data == "admin_edit_help":
-        # Help mesajını düzenle
-        await query.edit_message_text(texts['edit_help'])
+    session.text = update.message.text
+    session.state = None
     
-    elif query.data == "admin_app_settings":
-        # App ayarları
-        await query.edit_message_text(texts['app_settings'])
+    await update.message.reply_text(texts['text_added'])
+    await show_broadcast_panel(update, context)
+
+# ========== MEDİA EKLEME ==========
+async def add_media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Media ekleme işlemi"""
+    query = update.callback_query
+    await query.answer()
     
-    elif query.data == "admin_stats":
-        # İstatistikler
-        try:
-            user_data = load_user_data()
-            total_users = len(user_data)
-            
-            # Dil dağılımı
-            lang_dist = {}
-            for user_info in user_data.values():
-                lang = user_info.get('lang', 'unknown')
-                lang_dist[lang] = lang_dist.get(lang, 0) + 1
-            
-            stats_text = f"{texts['stats_title']}\n\n"
-            stats_text += f"{texts['total_users']} {total_users}\n\n"
-            stats_text += f"{texts['lang_dist']}\n"
-            
-            for lang, count in lang_dist.items():
-                percentage = (count / total_users * 100) if total_users > 0 else 0
-                lang_name = LANG_NAMES[user_lang].get(lang, lang)
-                stats_text += f"• {lang_name}: {count} ({percentage:.1f}%)\n"
-            
-            # Geri butonu
-            keyboard = [[InlineKeyboardButton(texts['back'], callback_data="admin_back")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await query.edit_message_text(stats_text, reply_markup=reply_markup, parse_mode='Markdown')
-            
-        except Exception as e:
-            await query.edit_message_text(f"❌ Error getting stats: {str(e)}")
+    user_id = query.from_user.id
+    user_lang = get_user_lang(user_id)
+    texts = BROADCAST_TEXTS[user_lang]
     
-    elif query.data == "admin_bot_settings":
-        # Bot ayarları
-        config = load_config()
-        
-        settings_text = f"{texts['bot_settings']}\n\n"
-        settings_text += f"👑 Admin ID: {config.get('admin_id', 'Not specified')}\n"
-        settings_text += f"{texts['channel']} {config.get('channel_username', 'Not set')}\n"
-        settings_text += f"{texts['invite_link']} {config.get('channel_invite_link', 'Not set')}\n"
-        settings_text += f"{texts['required_sub']} {texts['on'] if config.get('required_channel') else texts['off']}\n\n"
-        settings_text += "Use /join command to change bot settings."
-        
-        keyboard = [[InlineKeyboardButton(texts['back'], callback_data="admin_back")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(settings_text, reply_markup=reply_markup)
+    session = get_session(user_id)
+    session.state = 'waiting_media'
     
-    elif query.data == "admin_back":
-        # Ana panele dön
-        buttons = BUTTON_TEXTS[user_lang]
-        keyboard = [
-            [InlineKeyboardButton(buttons['broadcast'], callback_data="admin_broadcast")],
-            [InlineKeyboardButton(buttons['edit_help'], callback_data="admin_edit_help")],
-            [InlineKeyboardButton(buttons['app_settings'], callback_data="admin_app_settings")],
-            [InlineKeyboardButton(buttons['stats'], callback_data="admin_stats")],
-            [InlineKeyboardButton(buttons['bot_settings'], callback_data="admin_bot_settings")]
+    await query.message.reply_text(texts['send_photo_video'])
+
+async def handle_media_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Media girdisini işle"""
+    user_id = update.effective_user.id
+    session = get_session(user_id)
+    
+    if session.state != 'waiting_media':
+        return
+    
+    user_lang = get_user_lang(user_id)
+    texts = BROADCAST_TEXTS[user_lang]
+    
+    if update.message.photo:
+        session.photo = update.message.photo[-1].file_id
+        session.video = None
+    elif update.message.video:
+        session.video = update.message.video.file_id
+        session.photo = None
+    
+    # Eğer caption varsa, text olarak kaydet
+    if update.message.caption:
+        session.text = update.message.caption
+    
+    session.state = None
+    
+    await update.message.reply_text(texts['media_added'])
+    await show_broadcast_panel(update, context)
+
+# ========== BUTON EKLEME ==========
+async def add_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Buton ekleme işlemi"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    user_lang = get_user_lang(user_id)
+    texts = BROADCAST_TEXTS[user_lang]
+    
+    session = get_session(user_id)
+    session.state = 'waiting_button_text'
+    
+    await query.message.reply_text(texts['enter_button_text'])
+
+async def handle_button_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Buton metni girdisini işle"""
+    user_id = update.effective_user.id
+    session = get_session(user_id)
+    
+    if session.state != 'waiting_button_text':
+        return
+    
+    user_lang = get_user_lang(user_id)
+    texts = BROADCAST_TEXTS[user_lang]
+    
+    # Geçici olarak buton metnini sakla
+    if not hasattr(session, 'temp_button'):
+        session.temp_button = {}
+    session.temp_button['text'] = update.message.text
+    session.state = 'waiting_button_url'
+    
+    await update.message.reply_text(texts['enter_button_url'])
+
+async def handle_button_url_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Buton URL girdisini işle"""
+    user_id = update.effective_user.id
+    session = get_session(user_id)
+    
+    if session.state != 'waiting_button_url':
+        return
+    
+    user_lang = get_user_lang(user_id)
+    texts = BROADCAST_TEXTS[user_lang]
+    
+    # Butonu tamamla
+    button_text = session.temp_button['text']
+    button_url = update.message.text
+    
+    session.buttons.append({
+        'text': button_text,
+        'url': button_url
+    })
+    
+    # Geçici veriyi temizle
+    del session.temp_button
+    session.state = None
+    
+    await update.message.reply_text(texts['button_added'])
+    await show_broadcast_panel(update, context)
+
+# ========== ÖNİZLEME ==========
+async def preview_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Broadcast önizlemesi"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    user_lang = get_user_lang(user_id)
+    texts = BROADCAST_TEXTS[user_lang]
+    
+    session = get_session(user_id)
+    
+    # Butonları oluştur
+    keyboard = []
+    for btn in session.buttons:
+        keyboard.append([InlineKeyboardButton(btn['text'], url=btn['url'])])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+    
+    preview_text = texts['preview_title'] + session.get_content_summary(user_lang)
+    
+    if session.photo:
+        await query.message.reply_photo(
+            photo=session.photo,
+            caption=preview_text,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+    elif session.video:
+        await query.message.reply_video(
+            video=session.video,
+            caption=preview_text,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+    else:
+        await query.message.reply_text(
+            preview_text,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+
+# ========== GÖNDERİM ONAYI ==========
+async def confirm_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gönderim onayı"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    user_lang = get_user_lang(user_id)
+    texts = BROADCAST_TEXTS[user_lang]
+    
+    session = get_session(user_id)
+    
+    # Kontrol: İçerik var mı?
+    if not session.text and not session.photo and not session.video:
+        await query.message.reply_text(texts['no_content'])
+        return
+    
+    # Kaç kişiye gidecek?
+    user_data = load_user_data()
+    total_users = len(user_data)
+    
+    keyboard = [
+        [
+            InlineKeyboardButton(texts['yes_send'], callback_data="broadcast_final_send"),
+            InlineKeyboardButton(texts['no_cancel'], callback_data="broadcast_back")
         ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(texts['panel_title'], reply_markup=reply_markup, parse_mode='Markdown')
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        texts['confirm_send'].format(total_users),
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+
+# ========== GERÇEK GÖNDERİM ==========
+async def send_broadcast_to_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Broadcast'i tüm kullanıcılara gönder"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    user_lang = get_user_lang(user_id)
+    texts = BROADCAST_TEXTS[user_lang]
+    
+    session = get_session(user_id)
+    
+    # Butonları oluştur
+    keyboard = []
+    for btn in session.buttons:
+        keyboard.append([InlineKeyboardButton(btn['text'], url=btn['url'])])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+    
+    # Tüm kullanıcıları al
+    user_data = load_user_data()
+    user_ids = list(user_data.keys())
+    
+    await query.edit_message_text(texts['sending'])
+    
+    # Gönderim istatistikleri
+    sent_count = 0
+    failed_count = 0
+    
+    # Her kullanıcıya gönder
+    for uid in user_ids:
+        try:
+            if session.photo:
+                await context.bot.send_photo(
+                    chat_id=int(uid),
+                    photo=session.photo,
+                    caption=session.text,
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown'
+                )
+            elif session.video:
+                await context.bot.send_video(
+                    chat_id=int(uid),
+                    video=session.video,
+                    caption=session.text,
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown'
+                )
+            else:
+                await context.bot.send_message(
+                    chat_id=int(uid),
+                    text=session.text,
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown'
+                )
+            sent_count += 1
+        except Exception as e:
+            print(f"❌ Failed to send to {uid}: {e}")
+            failed_count += 1
+    
+    # Oturumu temizle
+    session.reset()
+    
+    # Sonuç mesajı
+    result_text = texts['sent_success'].format(sent_count)
+    if failed_count > 0:
+        result_text += "\n" + texts['sent_failed'].format(failed_count)
+    
+    await query.edit_message_text(result_text)
+    await show_broadcast_panel(update, context)
+
+# ========== YARDIMCI FONKSİYONLAR ==========
+async def show_broadcast_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Broadcast panelini göster"""
+    user_id = None
+    
+    if update.callback_query:
+        user_id = update.callback_query.from_user.id
+    elif update.message:
+        user_id = update.message.from_user.id
+    
+    if not user_id:
+        return
+    
+    user_lang = get_user_lang(user_id)
+    texts = BROADCAST_TEXTS[user_lang]
+    
+    session = get_session(user_id)
+    
+    # Ana broadcast paneli
+    keyboard = [
+        [InlineKeyboardButton(texts['add_text'], callback_data="broadcast_add_text")],
+        [InlineKeyboardButton(texts['add_media'], callback_data="broadcast_add_media")],
+        [InlineKeyboardButton(texts['add_button'], callback_data="broadcast_add_button")],
+        [
+            InlineKeyboardButton(texts['preview'], callback_data="broadcast_preview"),
+            InlineKeyboardButton(texts['send'], callback_data="broadcast_confirm_send")
+        ],
+        [
+            InlineKeyboardButton(texts['remove_last'], callback_data="broadcast_remove_last"),
+            InlineKeyboardButton(texts['clear_all'], callback_data="broadcast_clear_all")
+        ],
+        [InlineKeyboardButton(texts['cancel'], callback_data="broadcast_cancel")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    if update.callback_query:
+        await update.callback_query.edit_message_text(
+            texts['panel_title'] + "\n\n" + session.get_content_summary(user_lang),
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+    elif update.message:
+        await update.message.reply_text(
+            texts['panel_title'] + "\n\n" + session.get_content_summary(user_lang),
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+
+async def remove_last_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Son ekleneni kaldır"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    session = get_session(user_id)
+    
+    if session.buttons:
+        session.buttons.pop()
+    elif session.video:
+        session.video = None
+    elif session.photo:
+        session.photo = None
+    elif session.text:
+        session.text = None
+    
+    await show_broadcast_panel(update, context)
+
+async def clear_all_items(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Tümünü temizle"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    session = get_session(user_id)
+    session.reset()
+    
+    await show_broadcast_panel(update, context)
+
+async def cancel_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Broadcast'i iptal et"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    session = get_session(user_id)
+    session.reset()
+    
+    user_lang = get_user_lang(user_id)
+    await query.edit_message_text("📭 Broadcast cancelled.")
+
+# ========== BUTON İŞLEMLERİ ==========
+async def broadcast_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Broadcast butonlarını işle"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    
+    if not is_admin(user_id):
+        user_lang = get_user_lang(user_id)
+        await query.edit_message_text(BROADCAST_TEXTS[user_lang]['admin_only'])
+        return
+    
+    if query.data == "broadcast_add_text":
+        await add_text_handler(update, context)
+    
+    elif query.data == "broadcast_add_media":
+        await add_media_handler(update, context)
     
     elif query.data == "broadcast_add_button":
-        # Buton ekle
-        await add_broadcast_button(update, context)
+        await add_button_handler(update, context)
     
-    elif query.data == "broadcast_send":
-        # Duyuruyu gönder
-        await send_broadcast(update, context)
+    elif query.data == "broadcast_preview":
+        await preview_broadcast(update, context)
+    
+    elif query.data == "broadcast_confirm_send":
+        await confirm_send(update, context)
+    
+    elif query.data == "broadcast_final_send":
+        await send_broadcast_to_all(update, context)
+    
+    elif query.data == "broadcast_remove_last":
+        await remove_last_item(update, context)
+    
+    elif query.data == "broadcast_clear_all":
+        await clear_all_items(update, context)
+    
+    elif query.data == "broadcast_cancel":
+        await cancel_broadcast(update, context)
+    
+    elif query.data == "broadcast_back":
+        await show_broadcast_panel(update, context)
 
 # ========== KURULUM ==========
 def setup(app):
-    """Admin komutlarını bot'a ekler"""
-    # Komutlar
+    """Sadece broadcast sistemi"""
+    # Komut
     app.add_handler(CommandHandler("settings", settings_command))
     
     # Buton işleyicileri
-    app.add_handler(CallbackQueryHandler(admin_button_callback, pattern="^admin_"))
-    app.add_handler(CallbackQueryHandler(admin_button_callback, pattern="^broadcast_"))
+    app.add_handler(CallbackQueryHandler(broadcast_button_callback, pattern="^broadcast_"))
     
-    # Duyuru içeriği işleyicileri
+    # Mesaj işleyicileri
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE,
-        handle_broadcast_content
+        handle_text_input
     ))
     app.add_handler(MessageHandler(
         filters.PHOTO & filters.ChatType.PRIVATE,
-        handle_broadcast_content
+        handle_media_input
     ))
     app.add_handler(MessageHandler(
         filters.VIDEO & filters.ChatType.PRIVATE,
-        handle_broadcast_content
-    ))
-    
-    # Buton metin ve URL işleyicileri
-    app.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE,
-        handle_button_text
+        handle_media_input
     ))
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE,
-        handle_button_url
+        handle_button_text_input
+    ))
+    app.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE,
+        handle_button_url_input
     ))
     
-    print("✅ Admin extension loaded: /settings (multi-language, enhanced broadcast)")
+    print("✅ Broadcast system loaded: /settings (professional)")
