@@ -49,19 +49,6 @@ def create_welcome_buttons(lang_data):
     
     return markup
 
-def create_help_buttons(lang_data):
-    """Yardım mesajı butonlarını oluştur"""
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    
-    markup.add(
-        types.InlineKeyboardButton(
-            lang_data['button_support'], 
-            url=lang_data['support_url']
-        )
-    )
-    
-    return markup
-
 @bot.message_handler(commands=['start'])
 def start_command(message):
     user_id = message.from_user.id
@@ -124,46 +111,54 @@ def show_welcome_message(message, lang_code=None):
         parse_mode='Markdown'
     )
 
+# YENİ GÜZEL /help KOMUTU
 @bot.message_handler(commands=['help', 'yardim', 'h'])
 def help_command(message):
-    """Yardım komutu - HTML formatında, herkes için"""
+    """Güzel emojili yardım komutu - her dilde"""
     user_id = message.from_user.id
     is_admin = (str(user_id) == ADMIN_ID)
     
     lang_data = diller.get_language_data(user_id)
+    user_name = diller.format_user_name(message.from_user)
     
-    markup = create_help_buttons(lang_data)
+    # 3 butonlu klavye
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        types.InlineKeyboardButton(
+            lang_data.get('button_channel', 'Kanal'), 
+            url=lang_data['channel_url']
+        ),
+        types.InlineKeyboardButton(
+            lang_data.get('button_prompts', 'Prompts'), 
+            url=lang_data['prompts_url']
+        ),
+        types.InlineKeyboardButton(
+            lang_data.get('button_support', 'Destek'), 
+            url=lang_data['support_url']
+        )
+    )
     
-    if is_admin:
-        help_text = f"""<b>{lang_data.get('help_title', 'Yardım')}</b>
+    # Güzel formatlı mesaj
+    help_text = f"""<b>{lang_data.get('help_greeting', 'Merhaba').format(name=user_name)}</b>
 
-<b>📌 Komutlar:</b>
-• /start - Botu başlat
-• /language - Dil değiştir
-• /help - Yardım
+<b>{lang_data.get('help_info_title', 'Botumuz hakkında bilgiler')}</b>
+• {lang_data.get('help_bot_for', 'Bot promptslar içindir')}
+• {lang_data.get('help_prompts_info', 'Hazır promptlar sadece kopyala yapıştır')}
+
+<b>{lang_data.get('help_commands_title', 'Komutlar')}</b>
+• {lang_data.get('help_start_cmd', '/start - Botu çalıştırmak için')}
+• {lang_data.get('help_help_cmd', '/help - Yardım için')}
+
+<b>✨ {lang_data.get('help_prompts_access', 'Promptlara erişmek için prompts butonuna tıklayın')}</b>
+<b>ℹ️ {lang_data.get('help_more_info', 'Daha fazla bilgi için aşağıdaki butonlara tıklayın')}</b>"""
+    
+    # Sadece admin için ek bilgi
+    if is_admin:
+        help_text += f"""
 
 <b>👑 Admin Komutları:</b>
 • /send - Duyuru gönder
-• /stats - İstatistikler
-
-<b>🔗 Bağlantılar:</b>
-• Kanal: {lang_data['channel_url']}
-• Prompts: {lang_data['prompts_url']}
-
-<b>❓ Sorularınız için:</b>"""
-    else:
-        help_text = f"""<b>{lang_data.get('help_title', 'Yardım')}</b>
-
-<b>📌 Komutlar:</b>
-• /start - Botu başlat
-• /language - Dil değiştir
-• /help - Yardım
-
-<b>🔗 Bağlantılar:</b>
-• Kanal: {lang_data['channel_url']}
-• Prompts: {lang_data['prompts_url']}
-
-<b>❓ Sorularınız için:</b>"""
+• /stats - İstatistikler"""
     
     bot.send_message(
         message.chat.id,
@@ -282,7 +277,7 @@ if __name__ == "__main__":
     print(f"🌍 Diller: {len(diller.DILLER)} dil")
     print("=" * 50)
     print("✅ /start - Çalışıyor")
-    print("✅ /help - HTML formatında çalışıyor")
+    print("✅ /help - Yeni güzel versiyon")
     print("✅ /send - Sadece admin")
     print("=" * 50)
     
