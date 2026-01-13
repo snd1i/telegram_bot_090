@@ -5,7 +5,8 @@ import duyuru
 import diller
 
 TOKEN = os.getenv('BOT_TOKEN')
-ADMIN_ID = "5541236874"
+# ADMIN ID'NİZİ BURAYA YAZIN (TIRNAK İÇİNDE)
+ADMIN_ID = "5541236874"  # ÖRNEK: "123456789" - TIRNAK İÇİNDE OLMALI!
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -65,23 +66,23 @@ def create_help_buttons(lang_data):
     
     return markup
 
+# /start KOMUTU - HERKES İÇİN
 @bot.message_handler(commands=['start'])
 def start_command(message):
     user_id = message.from_user.id
     users.add(user_id)
     
-    # DEBUG: Hangi kullanıcı start yaptı
-    print(f"🔍 /start komutu: {user_id} (Admin mi: {str(user_id) == ADMIN_ID})")
+    print(f"✅ /start: Kullanıcı {user_id} (Admin mi: {str(user_id) == ADMIN_ID})")
     
     # Eğer kullanıcı daha önce dil seçtiyse doğrudan hoş geldin göster
     user_lang = diller.get_user_language(user_id)
     
     if user_lang:
-        print(f"✅ Kullanıcının dili var: {user_lang}")
-        # Dil zaten seçilmiş, hoş geldin göster (HERKES İÇİN - ADMIN DAHİL)
+        print(f"   Dil var: {user_lang}")
+        # Dil zaten seçilmiş, hoş geldin göster
         show_welcome_message(message, user_lang)
     else:
-        print(f"⚠️ Kullanıcının dili yok, dil seçimi gösteriliyor")
+        print(f"   Dil yok, seçim gösteriliyor")
         # Dil seçimi göster
         show_language_selection(message)
 
@@ -99,21 +100,16 @@ def show_language_selection(message):
     )
 
 def show_welcome_message(message, lang_code=None):
-    """Hoş geldin mesajını göster (HERKES İÇİN - ADMIN DAHİL)"""
+    """Hoş geldin mesajını göster (HERKES İÇİN)"""
     user_id = message.from_user.id
-    
-    # DEBUG
-    print(f"👋 Hoşgeldin mesajı gösteriliyor: {user_id}, dil: {lang_code}")
     
     if not lang_code:
         lang_code = diller.get_user_language(user_id) or 'tr'
-        print(f"📝 Dil belirlendi: {lang_code}")
     
     lang_data = diller.DILLER.get(lang_code, diller.DILLER['tr'])
     
     # Kullanıcı adını hazırla
     user_name = diller.format_user_name(message.from_user)
-    print(f"👤 Kullanıcı adı: {user_name}")
     
     # Butonları oluştur
     markup = create_welcome_buttons(lang_data)
@@ -134,20 +130,17 @@ def show_welcome_message(message, lang_code=None):
 {lang_data['welcome_line8']}
 """
     
-    # Admin ise istatistik ekle (HER ZAMAN)
+    # SADECE ADMIN için istatistik ekle
     if str(user_id) == ADMIN_ID:
         admin_stats = f"\n\n📊 **Admin İstatistik:**\n• 👥 Toplam kullanıcı: {len(users)}\n• 🔧 Duyuru gönder: /send"
         welcome_text += admin_stats
-        print(f"👑 Admin istatistik eklendi")
     
-    print(f"📨 Mesaj gönderiliyor...")
     bot.send_message(
         message.chat.id,
         welcome_text,
         reply_markup=markup,
         parse_mode='Markdown'
     )
-    print(f"✅ Hoşgeldin mesajı gönderildi")
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('lang_'))
 def handle_language_selection(call):
@@ -155,12 +148,9 @@ def handle_language_selection(call):
     user_id = call.from_user.id
     lang_code = call.data.replace('lang_', '')
     
-    print(f"🎯 Dil seçimi: {user_id} -> {lang_code}")
-    
     if lang_code in diller.DILLER:
         # Dil tercihini kaydet
         diller.set_user_language(user_id, lang_code)
-        print(f"💾 Dil kaydedildi: {lang_code}")
         
         # Callback mesajını güncelle
         lang_data = diller.DILLER[lang_code]
@@ -173,62 +163,69 @@ def handle_language_selection(call):
         except:
             pass
         
-        # Hoş geldin mesajını göster (HERKES İÇİN)
+        # Hoş geldin mesajını göster
         show_welcome_message(call.message, lang_code)
 
+# /language KOMUTU - HERKES İÇİN
 @bot.message_handler(commands=['language', 'dil'])
 def change_language(message):
     """Dil değiştirme komutu"""
-    print(f"🌐 Dil değiştirme: {message.from_user.id}")
     show_language_selection(message)
 
-@bot.message_handler(commands=['help', 'yardim'])
+# /help KOMUTU - HERKES İÇİN (DİL DESTEKLİ)
+@bot.message_handler(commands=['help', 'yardim', 'h', 'y'])
 def help_command(message):
-    """Yardım komutu"""
+    """Yardım komutu - HERKES İÇİN"""
     user_id = message.from_user.id
-    print(f"❓ /help komutu: {user_id}")
+    is_admin = (str(user_id) == ADMIN_ID)
     
+    # Kullanıcı dilini al
     lang_data = diller.get_language_data(user_id)
-    print(f"📚 Kullanıcı dili: {lang_data['code']}")
     
     # Butonları oluştur
     markup = create_help_buttons(lang_data)
-    print(f"🔘 Butonlar oluşturuldu")
     
-    # Yardım mesajı
+    # Yardım mesajını oluştur (HERKES İÇİN)
     help_text = f"""
-ℹ️ **{lang_data['help_command']}** /help
+ℹ️ **{lang_data['help_title']}**
 
-**📌 {diller.format_user_name(message.from_user)} Komutlar:**
-• /start - Botu başlat
-• /language - Dil değiştir
-• /help - Yardım mesajı
-
-**👑 Admin Komutları:**
-• /send - Duyuru gönder
-• /stats - İstatistikler
-
-**🔗 Bağlantılar:**
+**📌 {lang_data['help_links']}:**
+• {lang_data['help_start']}
+• {lang_data['help_language']}
+• {lang_data['help_help']}
+"""
+    
+    # SADECE ADMIN için admin komutlarını göster
+    if is_admin:
+        help_text += f"""
+        
+**👑 {diller.format_user_name(message.from_user)} Admin Komutları:**
+• {lang_data['help_admin_send']}
+• {lang_data['help_admin_stats']}
+"""
+    
+    help_text += f"""
+    
+**🔗 {lang_data['help_links']}:**
 • Kanal: {lang_data['channel_url']}
 • Prompts: {lang_data['prompts_url']}
 
-**❓ Sorularınız için aşağıdaki butona tıklayın:**
+**❓ {lang_data['help_questions']}:**
 """
     
-    print(f"📤 Yardım mesajı gönderiliyor...")
     bot.send_message(
         message.chat.id,
         help_text,
         reply_markup=markup,
         parse_mode='Markdown'
     )
-    print(f"✅ Yardım mesajı gönderildi")
 
+# /send KOMUTU - SADECE ADMIN
 @bot.message_handler(commands=['send'])
 def send_command(message):
     user_id = message.from_user.id
-    print(f"📨 /send komutu: {user_id}")
     
+    # SADECE ADMIN
     if str(user_id) != ADMIN_ID:
         lang_data = diller.get_language_data(user_id)
         bot.reply_to(
@@ -245,9 +242,10 @@ def send_command(message):
     )
     bot.register_next_step_handler(msg, duyuru.process_duyuru_text)
 
+# /stats KOMUTU - SADECE ADMIN
 @bot.message_handler(commands=['stats'])
 def stats_command(message):
-    # SADECE ADMIN istatistik görebilir
+    # SADECE ADMIN
     if str(message.from_user.id) == ADMIN_ID:
         bot.reply_to(
             message,
@@ -257,8 +255,30 @@ def stats_command(message):
             f"• 🔑 Admin ID: {ADMIN_ID}",
             parse_mode='Markdown'
         )
+    else:
+        lang_data = diller.get_language_data(message.from_user.id)
+        bot.reply_to(
+            message,
+            f"⛔ {lang_data['help_command']} /help"
+        )
 
-# Diğer callback'ler
+# /id KOMUTU - TEST İÇİN (SONRA SİLEBİLİRSİNİZ)
+@bot.message_handler(commands=['id', 'myid'])
+def get_id_command(message):
+    user_id = message.from_user.id
+    is_admin = (str(user_id) == ADMIN_ID)
+    
+    bot.reply_to(
+        message,
+        f"👤 **Bilgileriniz:**\n"
+        f"• ID: `{user_id}`\n"
+        f"• Admin mi: {'✅ Evet' if is_admin else '❌ Hayır'}\n"
+        f"• Dil: {diller.get_user_language(user_id) or 'Belirtilmemiş'}\n\n"
+        f"🔑 **Admin ID ayarı:** `{ADMIN_ID}`",
+        parse_mode='Markdown'
+    )
+
+# Callback handler
 @bot.callback_query_handler(func=lambda call: True)
 def handle_all_callbacks(call):
     # Dil seçimi değilse duyuru callback'lerine yönlendir
@@ -276,10 +296,9 @@ def handle_all_messages(message):
     user_id = message.from_user.id
     users.add(user_id)
     
-    lang_data = diller.get_language_data(user_id)
-    
-    # Eğer mesaj "/" ile başlamıyorsa
+    # Sadece komut değilse
     if not message.text.startswith('/'):
+        lang_data = diller.get_language_data(user_id)
         bot.reply_to(
             message,
             f"🤖 {lang_data['welcome_line2']}\n\n"
@@ -296,7 +315,9 @@ if __name__ == "__main__":
     print(f"👥 Kullanıcı: {len(users)}")
     print(f"🌍 Diller: {len(diller.DILLER)} dil")
     print("=" * 50)
-    print("⚠️ DEBUG MODE: Tüm loglar görünecek")
+    print("✅ Tüm komutlar herkes için çalışıyor")
+    print("✅ /help komutu dil desteği ile çalışıyor")
+    print("✅ Admin komutları sadece admin için")
     print("=" * 50)
     
     bot.infinity_polling()
