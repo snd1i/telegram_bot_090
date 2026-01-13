@@ -2,23 +2,22 @@ import telebot
 from telebot import types
 import diller
 import time
+import threading
 
 # Telegram bot instance'ı
 bot = None
 
-# Zorunlu kanallar (SADECE 1 KANAL)
-REQUIRED_CHANNELS = [
-    {
-        'name': 'SNDI Kanal 📢',
-        'url': 'https://t.me/sndiyi',
-        'username': 'sndiyi'
-    }
-]
+# Zorunlu kanal
+REQUIRED_CHANNEL = {
+    'name': 'SNDI Kanal 📢',
+    'url': 'https://t.me/sndiyi',
+    'username': 'sndiyi'
+}
 
 # Abonelik durumu
-user_subscriptions = {}
+user_subscriptions = {}  # {user_id: {'subscribed': True/False, 'last_check': timestamp}}
 pending_checks = {}  # Bekleyen kontroller
-last_check_time = {}  # Son kontrol zamanları
+active_users = set()  # Aktif kullanıcılar (botu kullanan)
 
 def init_bot(bot_instance):
     """Bot instance'ını başlat"""
@@ -30,7 +29,6 @@ def get_subscription_text(lang_code):
     if lang_code == 'ku_badini':
         return {
             'title': "🔒 پێدفیە کەنالێ مە جوین بکی دا بشێی بوتی بکار بینی",
-            'channels_title': "کەنالێ یجباری",
             'steps_title': "ختوە",
             'step1': "تلا خول کەنالی بدە",
             'step2': "جوین بکە", 
@@ -39,30 +37,28 @@ def get_subscription_text(lang_code):
             'welcome': "🤖 خێرهاتی بو نافا بوتی!",
             'not_subscribed': "هێشتا تە کەنال جوین نەکرە",
             'check_button': "من جوین کر 🔁",
-            'already_subscribed': "✅ تە هەر جوین کرەویە",
+            'unsubscribed': "❌ تە کەنال بەجێهێشتە، دیسان جوین بکە!",
             'subscribe_button': "کەنال 📢",
             'subscribed_button': "جوین کر 🎯"
         }
     elif lang_code == 'ku_sorani':
         return {
-            'title': "🔒 پێویستە بەشداربیت لە کەناڵەکانمان بۆ بەکارهێنانی بۆت!",
-            'channels_title': "کەناڵە پێویستەکان",
+            'title': "🔒 پێویستە بەشداربیت لە کەناڵەکەمان بۆ بەکارهێنانی بۆت!",
             'steps_title': "هەنگاوەکان",
-            'step1': "کرتە لەسەر کەناڵەکان بکە",
+            'step1': "کرتە لەسەر کەناڵەکە بکە",
             'step2': "بەشداربە",
             'step3': "دوای بەشداربوون بۆت بەکاربهێنە",
-            'success': "✅ پیرۆز بێت! بەشداربوویت لە هەموو کەناڵەکان.",
+            'success': "✅ پیرۆز بێت! بەشداربوویت.",
             'welcome': "🤖 بەخێربێیت بۆ بۆت!",
             'not_subscribed': "هێشتا بەشدارنەبوویت",
             'check_button': "پشکنینی بەشداربوون 🔁",
-            'already_subscribed': "✅ هەر بەشداربوویت",
+            'unsubscribed': "❌ کەناڵەکەت بەجێهێشتووە، دیسان بەشداربە!",
             'subscribe_button': "کەناڵ 📢",
             'subscribed_button': "بەشداربوو 🎯"
         }
     elif lang_code == 'tr':
         return {
             'title': "🔒 Botu kullanmak için kanalımıza abone olmalısınız!",
-            'channels_title': "Zorunlu Kanal",
             'steps_title': "Adımlar",
             'step1': "Kanala tıklayın",
             'step2': "Abone olun",
@@ -71,14 +67,13 @@ def get_subscription_text(lang_code):
             'welcome': "🤖 Bot'a hoş geldiniz!",
             'not_subscribed': "Hala abone değilsiniz",
             'check_button': "Aboneliği Kontrol Et 🔁",
-            'already_subscribed': "✅ Zaten abonesiniz",
+            'unsubscribed': "❌ Kanaldan ayrılmışsınız, tekrar abone olun!",
             'subscribe_button': "Kanal 📢",
             'subscribed_button': "Abone Oldum 🎯"
         }
     elif lang_code == 'en':
         return {
             'title': "🔒 You must subscribe to our channel to use the bot!",
-            'channels_title': "Required Channel",
             'steps_title': "Steps",
             'step1': "Click on the channel",
             'step2': "Subscribe",
@@ -87,14 +82,13 @@ def get_subscription_text(lang_code):
             'welcome': "🤖 Welcome to the bot!",
             'not_subscribed': "Still not subscribed",
             'check_button': "Check Subscription 🔁",
-            'already_subscribed': "✅ Already subscribed",
+            'unsubscribed': "❌ You left the channel, subscribe again!",
             'subscribe_button': "Channel 📢",
             'subscribed_button': "Subscribed 🎯"
         }
     elif lang_code == 'ar':
         return {
             'title': "🔒 يجب أن تشترك في قناتنا لاستخدام البوت!",
-            'channels_title': "القناة المطلوبة",
             'steps_title': "الخطوات",
             'step1': "انقر على القناة",
             'step2': "اشترك",
@@ -103,7 +97,7 @@ def get_subscription_text(lang_code):
             'welcome': "🤖 مرحبًا بك في البوت!",
             'not_subscribed': "ما زلت غير مشترك",
             'check_button': "تحقق من الاشتراك 🔁",
-            'already_subscribed': "✅ مشترك بالفعل",
+            'unsubscribed': "❌ غادرت القناة، اشترك مرة أخرى!",
             'subscribe_button': "القناة 📢",
             'subscribed_button': "اشتركت 🎯"
         }
@@ -111,37 +105,52 @@ def get_subscription_text(lang_code):
         # Varsayılan Türkçe
         return get_subscription_text('tr')
 
-def check_subscription(user_id):
-    """Kullanıcının kanala abone olup olmadığını kontrol et"""
+def check_subscription_real_time(user_id):
+    """Gerçek zamanlı abonelik kontrolü (API çağrısı)"""
     try:
-        for channel in REQUIRED_CHANNELS:
-            try:
-                # Kullanıcının kanalda olup olmadığını kontrol et
-                member = bot.get_chat_member(f'@{channel["username"]}', user_id)
-                if member.status not in ['member', 'administrator', 'creator']:
-                    return False, channel
-            except Exception as e:
-                print(f"Kanal kontrol hatası {channel['username']}: {e}")
-                return False, channel
-        return True, None
+        member = bot.get_chat_member(f'@{REQUIRED_CHANNEL["username"]}', user_id)
+        is_subscribed = member.status in ['member', 'administrator', 'creator']
+        return is_subscribed
     except Exception as e:
-        print(f"Abonelik kontrol hatası: {e}")
-        return False, REQUIRED_CHANNELS[0]
+        print(f"Gerçek zamanlı abonelik kontrol hatası: {e}")
+        return False
 
-def create_subscription_keyboard(lang_code, user_id=None):
+def check_subscription(user_id, force_check=False):
+    """Kullanıcının kanala abone olup olmadığını kontrol et"""
+    current_time = time.time()
+    
+    # Cache'den kontrol et (5 dakika öncesine kadar geçerli)
+    if user_id in user_subscriptions and not force_check:
+        user_data = user_subscriptions[user_id]
+        # 5 dakikadan eski değilse cache kullan
+        if current_time - user_data['last_check'] < 300:  # 5 dakika
+            return user_data['subscribed'], REQUIRED_CHANNEL
+    
+    # Gerçek zamanlı kontrol
+    is_subscribed = check_subscription_real_time(user_id)
+    
+    # Cache'i güncelle
+    user_subscriptions[user_id] = {
+        'subscribed': is_subscribed,
+        'last_check': current_time
+    }
+    
+    return is_subscribed, REQUIRED_CHANNEL
+
+def create_subscription_keyboard(lang_code):
     """Abonelik kontrol klavyesi oluştur - SADECE 2 BUTON"""
     markup = types.InlineKeyboardMarkup(row_width=1)
     text = get_subscription_text(lang_code)
     
-    # Kanal butonu (her zaman göster)
+    # Kanal butonu
     markup.add(
         types.InlineKeyboardButton(
             text['subscribe_button'],
-            url=REQUIRED_CHANNELS[0]['url']
+            url=REQUIRED_CHANNEL['url']
         )
     )
     
-    # Otomatik kontrol aktif - "Abone Oldum" butonu
+    # Abone Oldum butonu
     markup.add(
         types.InlineKeyboardButton(
             text['subscribed_button'],
@@ -153,23 +162,24 @@ def create_subscription_keyboard(lang_code, user_id=None):
 
 def show_subscription_required(chat_id, user_id, lang_code='tr'):
     """Abonelik gerekli mesajını göster"""
-    # Önce kullanıcının zaten abone olup olmadığını kontrol et
-    is_subscribed, missing_channel = check_subscription(user_id)
+    # Gerçek zamanlı kontrol (cache bypass)
+    is_subscribed = check_subscription_real_time(user_id)
     
     if is_subscribed:
-        # Zaten abone, mesaj gösterme, True döndür
-        user_subscriptions[user_id] = True
+        # Zaten abone, cache'i güncelle
+        user_subscriptions[user_id] = {
+            'subscribed': True,
+            'last_check': time.time()
+        }
         return True
     
     # Abone değil, mesaj göster
     text = get_subscription_text(lang_code)
-    markup = create_subscription_keyboard(lang_code, user_id)
+    markup = create_subscription_keyboard(lang_code)
     
+    # SADELEŞTİRİLMİŞ MESAJ (kanal listesi yok)
     message_text = f"""
 {text['title']}
-
-📌 **{text['channels_title']}:**
-{REQUIRED_CHANNELS[0]['name']}
 
 ⚠️ **{text['steps_title']}:**
 • {text['step1']}
@@ -177,7 +187,7 @@ def show_subscription_required(chat_id, user_id, lang_code='tr'):
 • {text['step3']}
 """
     
-    # Mesajı gönder ve ID'sini kaydet
+    # Mesajı gönder
     msg = bot.send_message(
         chat_id,
         message_text,
@@ -185,15 +195,17 @@ def show_subscription_required(chat_id, user_id, lang_code='tr'):
         parse_mode='Markdown'
     )
     
-    # Mesaj ID'sini kaydet (sonra silmek için)
+    # Bekleyen kontrollere ekle
     pending_checks[user_id] = {
         'message_id': msg.message_id,
         'chat_id': chat_id,
-        'lang_code': lang_code
+        'lang_code': lang_code,
+        'shown_at': time.time()
     }
     
-    # Otomatik kontrol için zamanı kaydet
-    last_check_time[user_id] = time.time()
+    # Aktif kullanıcılara ekle (kanaldan ayrılma kontrolü için)
+    active_users.add(user_id)
+    
     return False
 
 def handle_subscription_check(call):
@@ -207,12 +219,15 @@ def handle_subscription_check(call):
     lang_code = lang_data['code'] if lang_data else 'tr'
     text = get_subscription_text(lang_code)
     
-    # Aboneliği kontrol et
-    is_subscribed, missing_channel = check_subscription(user_id)
+    # GERÇEK ZAMANLI kontrol
+    is_subscribed = check_subscription_real_time(user_id)
     
     if is_subscribed:
         # Abone olmuş
-        user_subscriptions[user_id] = True
+        user_subscriptions[user_id] = {
+            'subscribed': True,
+            'last_check': time.time()
+        }
         
         # Eski abonelik mesajını sil
         try:
@@ -223,23 +238,26 @@ def handle_subscription_check(call):
         # Bekleyen mesajı temizle
         cleanup_pending_message(user_id)
         
-        # Başarı mesajı göster (geçici)
+        # Aktif kullanıcılara ekle
+        active_users.add(user_id)
+        
+        # Başarı mesajı göster (1 saniye)
         success_msg = bot.send_message(
             chat_id,
             f"{text['success']}",
             parse_mode='Markdown'
         )
         
-        # 1.5 saniye bekle ve sil
-        time.sleep(1.5)
+        # 1 saniye bekle ve HOŞGELDİN MESAJINI GÖSTER
+        time.sleep(1)
         try:
             bot.delete_message(chat_id, success_msg.message_id)
         except:
             pass
         
-        # Ana modüle sinyal gönder
-        from main import on_subscription_complete
-        on_subscription_complete(call.message, user_id)
+        # HEMEN hoşgeldin mesajını göster
+        from main import show_welcome_message
+        show_welcome_message(call.message, lang_code)
         
     else:
         # Hala abone değil
@@ -249,16 +267,19 @@ def handle_subscription_check(call):
             show_alert=True
         )
 
-def is_user_subscribed(user_id):
+def is_user_subscribed(user_id, force_check=False):
     """Kullanıcı abone mi kontrol et"""
-    # Önce cache'den kontrol et
-    if user_id in user_subscriptions:
-        if user_subscriptions[user_id]:
-            return True
+    # GERÇEK ZAMANLI kontrol (force_check True ise)
+    if force_check:
+        is_subscribed = check_subscription_real_time(user_id)
+        user_subscriptions[user_id] = {
+            'subscribed': is_subscribed,
+            'last_check': time.time()
+        }
+        return is_subscribed
     
-    # Cache'de yoksa veya False ise API'den kontrol et
-    is_subscribed, _ = check_subscription(user_id)
-    user_subscriptions[user_id] = is_subscribed
+    # Normal cache kontrolü
+    is_subscribed, _ = check_subscription(user_id, force_check)
     return is_subscribed
 
 def cleanup_pending_message(user_id):
@@ -267,50 +288,84 @@ def cleanup_pending_message(user_id):
         try:
             data = pending_checks[user_id]
             bot.delete_message(data['chat_id'], data['message_id'])
-            del pending_checks[user_id]
         except:
             pass
-        if user_id in last_check_time:
-            del last_check_time[user_id]
+        del pending_checks[user_id]
 
-def auto_check_subscription():
-    """Otomatik abonelik kontrolü (periyodik olarak çağrılacak)"""
-    current_time = time.time()
-    users_to_remove = []
+def check_unsubscribed_users():
+    """Kanaldan ayrılan kullanıcıları kontrol et"""
+    users_to_check = list(active_users.copy())
     
-    for user_id, check_data in list(pending_checks.items()):
-        # Son kontrolden 10 saniye geçmiş mi?
-        if user_id in last_check_time and current_time - last_check_time[user_id] >= 10:
-            # Kontrol et
-            is_subscribed, _ = check_subscription(user_id)
+    for user_id in users_to_check:
+        try:
+            # Sadece son 10 dakika içinde aktif olanları kontrol et
+            if user_id in user_subscriptions:
+                user_data = user_subscriptions[user_id]
+                # 10 dakikadan eski kayıtları kontrol et
+                if time.time() - user_data['last_check'] > 600:
+                    continue
             
-            if is_subscribed:
-                # Otomatik olarak abone olmuş
-                user_subscriptions[user_id] = True
-                
-                # Mesajı sil
-                try:
-                    bot.delete_message(check_data['chat_id'], check_data['message_id'])
-                except:
-                    pass
-                
-                # Başarı mesajı göster
-                text = get_subscription_text(check_data['lang_code'])
-                bot.send_message(
-                    check_data['chat_id'],
-                    f"✅ {text['success']}",
-                    parse_mode='Markdown'
-                )
-                
-                # Ana modüle sinyal gönder
-                from main import on_subscription_complete_auto
-                on_subscription_complete_auto(check_data['chat_id'], user_id, check_data['lang_code'])
-                
-                users_to_remove.append(user_id)
+            # Gerçek zamanlı kontrol
+            is_subscribed = check_subscription_real_time(user_id)
             
-            # Son kontrol zamanını güncelle
-            last_check_time[user_id] = current_time
+            if not is_subscribed:
+                # Kanaldan ayrılmış
+                print(f"⚠️ Kullanıcı kanaldan ayrıldı: {user_id}")
+                
+                # Cache'i güncelle
+                user_subscriptions[user_id] = {
+                    'subscribed': False,
+                    'last_check': time.time()
+                }
+                
+                # Eski mesajları temizle
+                cleanup_pending_message(user_id)
+                
+                # Yeni abonelik mesajı gönder (eğer hala aktifse)
+                from main import get_user_chat_id
+                chat_id = get_user_chat_id(user_id)
+                if chat_id:
+                    lang_data = diller.get_language_data(user_id)
+                    lang_code = lang_data['code'] if lang_data else 'tr'
+                    
+                    text = get_subscription_text(lang_code)
+                    markup = create_subscription_keyboard(lang_code)
+                    
+                    message_text = f"""
+{text['unsubscribed']}
+
+{text['title']}
+
+⚠️ **{text['steps_title']}:**
+• {text['step1']}
+• {text['step2']}
+• {text['step3']}
+"""
+                    
+                    bot.send_message(
+                        chat_id,
+                        message_text,
+                        reply_markup=markup,
+                        parse_mode='Markdown'
+                    )
+                    
+        except Exception as e:
+            print(f"Kanaldan ayrılma kontrol hatası {user_id}: {e}")
+
+def start_unsubscribe_checker():
+    """Kanaldan ayrılma kontrolünü başlat"""
+    def checker():
+        while True:
+            try:
+                check_unsubscribed_users()
+            except Exception as e:
+                print(f"Kanaldan ayrılma kontrol hatası: {e}")
+            time.sleep(60)  # Her 1 dakikada bir kontrol et
     
-    # Temizle
-    for user_id in users_to_remove:
-        cleanup_pending_message(user_id)
+    thread = threading.Thread(target=checker, daemon=True)
+    thread.start()
+    print("✅ Kanaldan ayrılma kontrolü başlatıldı")
+
+def add_active_user(user_id):
+    """Aktif kullanıcı ekle"""
+    active_users.add(user_id)
