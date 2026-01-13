@@ -111,21 +111,28 @@ DILLER = {
 user_languages = {}
 
 def get_user_language(user_id):
+    """Kullanıcının dil tercihini getir"""
     return user_languages.get(user_id, None)
 
 def set_user_language(user_id, lang_code):
+    """Kullanıcı dil tercihini kaydet"""
     if lang_code in DILLER:
         user_languages[user_id] = lang_code
         return True
     return False
 
 def get_language_data(user_id):
+    """Kullanıcı diline göre dil verilerini getir"""
     lang_code = get_user_language(user_id)
+    
+    # Eğer dil tercihi yoksa, Türkçe varsayılan
     if not lang_code:
         lang_code = 'tr'
+    
     return DILLER.get(lang_code, DILLER['tr'])
 
 def format_user_name(user):
+    """Kullanıcı adını formatla"""
     if user.username:
         return f"@{user.username}"
     elif user.first_name:
