@@ -17,13 +17,6 @@ DILLER = {
         'button_support': 'هاریکاری',
         'help_command': 'ژبو هاریکاریێ',
         'help_title': 'هاریکاری',
-        'help_start': '/start - بۆتێ دەستپێکە',
-        'help_language': '/language - زمانێ بگۆرە',
-        'help_help': '/help - هاریکاری',
-        'help_admin_send': '/send - پرومتس بنێرە',
-        'help_admin_stats': '/stats - ژمارە',
-        'help_links': 'پەیوەندیکان',
-        'help_questions': 'بو پرسیارا خو',
         'channel_url': 'https://t.me/sndiyi',
         'prompts_url': 'https://t.me/PrompttAI_bot/Prompts',
         'support_url': 'https://t.me/k4miran_sndi'
@@ -45,13 +38,6 @@ DILLER = {
         'button_support': 'یارمەتی',
         'help_command': 'بۆ یارمەتی',
         'help_title': 'یارمەتی',
-        'help_start': '/start - بۆتێ دەستپێبکە',
-        'help_language': '/language - زمان بگۆرە',
-        'help_help': '/help - یارمەتی',
-        'help_admin_send': '/send - پرۆمپت بنێرە',
-        'help_admin_stats': '/stats - ئامارەکان',
-        'help_links': 'بەستەرەکان',
-        'help_questions': 'بۆ پرسیارەکانت',
         'channel_url': 'https://t.me/sndiyi',
         'prompts_url': 'https://t.me/PrompttAI_bot/Prompts',
         'support_url': 'https://t.me/k4miran_sndi'
@@ -73,13 +59,6 @@ DILLER = {
         'button_support': 'destek',
         'help_command': 'Yardım için',
         'help_title': 'Yardım',
-        'help_start': '/start - Botu başlat',
-        'help_language': '/language - Dil değiştir',
-        'help_help': '/help - Yardım',
-        'help_admin_send': '/send - Duyuru gönder',
-        'help_admin_stats': '/stats - İstatistikler',
-        'help_links': 'Bağlantılar',
-        'help_questions': 'Sorularınız için',
         'channel_url': 'https://t.me/sndiyi',
         'prompts_url': 'https://t.me/PrompttAI_bot/Prompts',
         'support_url': 'https://t.me/k4miran_sndi'
@@ -101,13 +80,6 @@ DILLER = {
         'button_support': 'support',
         'help_command': 'For help',
         'help_title': 'Help',
-        'help_start': '/start - Start bot',
-        'help_language': '/language - Change language',
-        'help_help': '/help - Help',
-        'help_admin_send': '/send - Send announcement',
-        'help_admin_stats': '/stats - Statistics',
-        'help_links': 'Links',
-        'help_questions': 'For your questions',
         'channel_url': 'https://t.me/sndiyi',
         'prompts_url': 'https://t.me/PrompttAI_bot/Prompts',
         'support_url': 'https://t.me/k4miran_sndi'
@@ -129,13 +101,6 @@ DILLER = {
         'button_support': 'الدعم',
         'help_command': 'للمساعدة',
         'help_title': 'المساعدة',
-        'help_start': '/start - ابدأ البوت',
-        'help_language': '/language - غير اللغة',
-        'help_help': '/help - المساعدة',
-        'help_admin_send': '/send - أرسل إعلان',
-        'help_admin_stats': '/stats - الإحصائيات',
-        'help_links': 'الروابط',
-        'help_questions': 'لأسئلتك',
         'channel_url': 'https://t.me/sndiyi',
         'prompts_url': 'https://t.me/PrompttAI_bot/Prompts',
         'support_url': 'https://t.me/k4miran_sndi'
@@ -146,28 +111,21 @@ DILLER = {
 user_languages = {}
 
 def get_user_language(user_id):
-    """Kullanıcının dil tercihini getir"""
     return user_languages.get(user_id, None)
 
 def set_user_language(user_id, lang_code):
-    """Kullanıcı dil tercihini kaydet"""
     if lang_code in DILLER:
         user_languages[user_id] = lang_code
         return True
     return False
 
 def get_language_data(user_id):
-    """Kullanıcı diline göre dil verilerini getir"""
     lang_code = get_user_language(user_id)
-    
-    # Eğer dil tercihi yoksa, Türkçe varsayılan
     if not lang_code:
         lang_code = 'tr'
-    
     return DILLER.get(lang_code, DILLER['tr'])
 
 def format_user_name(user):
-    """Kullanıcı adını formatla"""
     if user.username:
         return f"@{user.username}"
     elif user.first_name:
@@ -175,13 +133,14 @@ def format_user_name(user):
     elif user.last_name:
         return user.last_name
     else:
-        if get_user_language(user.id) == 'ku_badini':
+        lang_code = get_user_language(user.id)
+        if lang_code == 'ku_badini':
             return "هەڤال"
-        elif get_user_language(user.id) == 'ku_sorani':
+        elif lang_code == 'ku_sorani':
             return "هاوڕێ"
-        elif get_user_language(user.id) == 'ar':
+        elif lang_code == 'ar':
             return "صديق"
-        elif get_user_language(user.id) == 'en':
+        elif lang_code == 'en':
             return "Friend"
         else:
             return "Arkadaş"
