@@ -56,7 +56,7 @@ def handle_duyuru_callbacks(call):
             show_preview(call.message, data['text'], None)
     
     elif call.data == 'send_duyuru':
-        # GÖNDER butonu - ÇALIŞAN VERSİYON
+        # GÖNDER butonu
         send_to_all_simple(call)
     
     elif call.data == 'cancel_duyuru':
@@ -92,7 +92,8 @@ def show_preview(message, text, photo_id):
         types.InlineKeyboardButton("❌ İPTAL", callback_data='cancel_duyuru')
     )
     
-    preview_text = f"📢 DUYURU\n\n{text}\n\n👥 {len(users)} kullanıcı"
+    # SADECE METİN - istatistik yok
+    preview_text = f"📢 {text}"
     
     if photo_id:
         bot.send_photo(
@@ -109,17 +110,14 @@ def show_preview(message, text, photo_id):
         )
 
 def send_to_all_simple(call):
-    """BASİT ve ÇALIŞAN gönderim fonksiyonu"""
+    """Gönderim fonksiyonu"""
     
     user_id = call.from_user.id
     
-    # Mesajı al
-    message = call.message
-    
-    # Önce bir "gönderiliyor" mesajı gönder (EDIT YAPMADAN)
+    # "gönderiliyor" mesajı
     status_msg = bot.send_message(
         call.message.chat.id,
-        f"⏳ Gönderiliyor... 0/{len(users)}"
+        f"⏳ Gönderiliyor..."
     )
     
     # OTOMATİK BUTON
@@ -127,14 +125,18 @@ def send_to_all_simple(call):
     markup.add(types.InlineKeyboardButton("prompts 🔥", url="https://t.me/PrompttAI_bot/Prompts"))
     
     # Mesaj içeriğini al
-    if message.content_type == 'photo':
+    if call.message.content_type == 'photo':
         # Fotoğraf mesajı
-        text = message.caption
-        photo_id = message.photo[-1].file_id
+        text = call.message.caption
+        photo_id = call.message.photo[-1].file_id
         has_photo = True
     else:
-        # Metin mesajı
-        text = message.text.replace("📢 DUYURU\n\n", "").split("\n\n👥")[0]
+        # Metin mesajı - sadece duyuru metnini al
+        full_text = call.message.text
+        if "📢 " in full_text:
+            text = full_text.replace("📢 ", "")
+        else:
+            text = full_text
         photo_id = None
         has_photo = False
     
@@ -164,24 +166,27 @@ def send_to_all_simple(call):
         except:
             failed += 1
         
-        # İlerlemeyi GÜNCELLE (sadece mesajı değiştir)
-        if i % 5 == 0 or i == total:
+        # İlerlemeyi sadece admin görsün
+        if i % 10 == 0 or i == total:
             bot.edit_message_text(
                 f"⏳ Gönderiliyor... {i}/{total}\n✓ {success} başarılı\n✗ {failed} başarısız",
                 status_msg.chat.id,
                 status_msg.message_id
             )
     
-    # Sonuç mesajı (YENİ MESAJ OLARAK)
+    # Sonuç mesajı - SADECE ADMIN GÖRSÜN
     bot.send_message(
         call.message.chat.id,
-        f"✅ Duyuru gönderildi!\n\n"
-        f"✓ Başarılı: {success}\n"
-        f"✗ Başarısız: {failed}\n"
-        f"👥 Toplam: {total}"
+        f"✅ **Duyuru gönderildi!**\n\n"
+        f"📊 **Admin İstatistikleri:**\n"
+        f"• ✓ Başarılı: {success}\n"
+        f"• ✗ Başarısız: {failed}\n"
+        f"• 👥 Toplam Kullanıcı: {total}\n"
+        f"• 🎯 Başarı Oranı: %{(success/total*100):.1f}\n\n"
+        f"🕐 {time.strftime('%H:%M:%S')}"
     )
     
-    # Önceki mesajı sil (opsiyonel)
+    # Önceki mesajı sil
     try:
         bot.delete_message(status_msg.chat.id, status_msg.message_id)
     except:
