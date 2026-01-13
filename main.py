@@ -6,7 +6,7 @@ import diller
 import subscription  # YENİ IMPORT
 
 TOKEN = os.getenv('BOT_TOKEN')
-ADMIN_ID = "BURAYA_SIZIN_TELEGRAM_ID_NIZI_YAZIN"
+ADMIN_ID = "5541236874"
 
 bot = telebot.TeleBot(TOKEN)
 
