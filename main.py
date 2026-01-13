@@ -3,13 +3,14 @@ import telebot
 from telebot import types
 import duyuru
 import diller
+import help_module  # YENİ IMPORT
 
 TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_ID = "5541236874"
 
 bot = telebot.TeleBot(TOKEN)
 
-# Tüm kullanıcıları sakla
+# Tüm kullanıcıları sakla (help_module'dan erişilebilir olacak)
 users = set()
 
 def create_language_keyboard():
@@ -44,19 +45,6 @@ def create_welcome_buttons(lang_data):
         types.InlineKeyboardButton(
             lang_data['button_prompts'], 
             url=lang_data['prompts_url']
-        )
-    )
-    
-    return markup
-
-def create_help_buttons(lang_data):
-    """Yardım mesajı butonlarını oluştur"""
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    
-    markup.add(
-        types.InlineKeyboardButton(
-            lang_data['button_support'], 
-            url=lang_data['support_url']
         )
     )
     
@@ -113,7 +101,6 @@ def show_welcome_message(message, lang_code=None):
 {lang_data['welcome_line8']}
 """
     
-    # SADECE ADMIN istatistik görür
     if str(user_id) == ADMIN_ID:
         admin_stats = f"\n\n📊 **Admin İstatistik:**\n• 👥 Toplam kullanıcı: {len(users)}\n• 🔧 Duyuru gönder: /send"
         welcome_text += admin_stats
@@ -121,65 +108,6 @@ def show_welcome_message(message, lang_code=None):
     bot.send_message(
         message.chat.id,
         welcome_text,
-        reply_markup=markup,
-        parse_mode='Markdown'
-    )
-
-# ✅ DÜZELTİLMİŞ /help KOMUTU - HERKES İÇİN ÇALIŞACAK
-@bot.message_handler(commands=['help'])
-def help_command(message):
-    """Yardım komutu - HERKES İÇİN ÇALIŞIYOR"""
-    user_id = message.from_user.id
-    is_admin = (str(user_id) == ADMIN_ID)
-    
-    # Kullanıcı dilini al
-    lang_data = diller.get_language_data(user_id)
-    
-    # Butonları oluştur
-    markup = create_help_buttons(lang_data)
-    
-    # Yardım mesajını oluştur - HERKES İÇİN
-    if is_admin:
-        # ADMIN için mesaj
-        help_text = f"""
-ℹ️ **{lang_data['help_title']}**
-
-**📌 Komutlar:**
-• /start - Botu başlat
-• /language - Dil değiştir
-• /help - Yardım
-
-**👑 Admin Komutları:**
-• /send - Duyuru gönder
-• /stats - İstatistikler
-
-**🔗 Bağlantılar:**
-• Kanal: {lang_data['channel_url']}
-• Prompts: {lang_data['prompts_url']}
-
-**❓ Sorularınız için:**
-"""
-    else:
-        # NORMAL KULLANICI için mesaj (admin komutları YOK)
-        help_text = f"""
-ℹ️ **{lang_data['help_title']}**
-
-**📌 Komutlar:**
-• /start - Botu başlat
-• /language - Dil değiştir
-• /help - Yardım
-
-**🔗 Bağlantılar:**
-• Kanal: {lang_data['channel_url']}
-• Prompts: {lang_data['prompts_url']}
-
-**❓ Sorularınız için:**
-"""
-    
-    # MESAJI GÖNDER - HERKES İÇİN
-    bot.send_message(
-        message.chat.id,
-        help_text,
         reply_markup=markup,
         parse_mode='Markdown'
     )
@@ -207,6 +135,11 @@ def handle_language_selection(call):
 @bot.message_handler(commands=['language', 'dil'])
 def change_language(message):
     show_language_selection(message)
+
+# ESKİ /help KOMUTUNU SİLİYORUZ veya YORUM SATIRI YAPIYORUZ
+# @bot.message_handler(commands=['help'])
+# def help_command(message):
+#     pass
 
 @bot.message_handler(commands=['send'])
 def send_command(message):
@@ -286,15 +219,19 @@ def handle_all_messages(message):
         )
 
 if __name__ == "__main__":
+    # Duyuru modülünü başlat
     duyuru.init_bot(bot, users)
+    
+    # YARDIM MODÜLÜNÜ KUR
+    help_module.setup_help_commands(bot)
     
     print("=" * 50)
     print("🤖 BOT BAŞLATILDI")
     print(f"🔑 Admin ID: {ADMIN_ID}")
     print(f"👥 Kullanıcı: {len(users)}")
     print("=" * 50)
-    print("✅ /help komutu HERKES için çalışıyor")
-    print("✅ Admin komutları sadece admin için")
+    print("✅ YENİ /help komutu kuruldu")
+    print("✅ Diğer dosyalar değişmedi")
     print("=" * 50)
     
     bot.infinity_polling()
