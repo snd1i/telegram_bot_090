@@ -4,9 +4,11 @@ from telebot import types
 import duyuru
 import diller
 import subscription
+import threading
+import time
 
 TOKEN = os.getenv('BOT_TOKEN')
-ADMIN_ID = "BURAYA_SIZIN_TELEGRAM_ID_NIZI_YAZIN"  # TIRNAK İÇİNDE
+ADMIN_ID = "5541236874"  # TIRNAK İÇİNDE
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -15,6 +17,20 @@ users = set()
 
 # Bot'u subscription modülüne ver
 subscription.init_bot(bot)
+
+def start_auto_checker():
+    """Otomatik abonelik kontrolü başlat"""
+    def checker():
+        while True:
+            try:
+                subscription.auto_check_subscription()
+            except Exception as e:
+                print(f"Otomatik kontrol hatası: {e}")
+            time.sleep(5)  # Her 5 saniyede bir kontrol et
+    
+    thread = threading.Thread(target=checker, daemon=True)
+    thread.start()
+    print("✅ Otomatik abonelik kontrolü başlatıldı")
 
 def create_language_keyboard():
     """Dil seçim klavyesi oluştur"""
@@ -62,7 +78,6 @@ def start_command(message):
     
     # ADMIN için direkt devam et
     if str(user_id) == ADMIN_ID:
-        print(f"   👑 Admin, direkt devam")
         user_lang = diller.get_user_language(user_id)
         if user_lang:
             show_welcome_message(message, user_lang)
@@ -71,15 +86,10 @@ def start_command(message):
         return
     
     # NORMAL KULLANICI için abonelik kontrolü
-    print(f"   👤 Normal kullanıcı, abonelik kontrolü")
-    
-    # Önce abone mi kontrol et
     is_subscribed = subscription.is_user_subscribed(user_id)
-    print(f"   📊 Abonelik durumu: {is_subscribed}")
     
     if is_subscribed:
         # Zaten abone, normal akış
-        print(f"   ✅ Zaten abone, normal akış")
         user_lang = diller.get_user_language(user_id)
         if user_lang:
             show_welcome_message(message, user_lang)
@@ -87,15 +97,12 @@ def start_command(message):
             show_language_selection(message)
     else:
         # Abone değil, dil seçimine yönlendir
-        print(f"   ❌ Abone değil, dil seçimi")
         user_lang = diller.get_user_language(user_id)
         if user_lang:
             # Dil seçmiş, direkt abonelik mesajı göster
-            print(f"   🌐 Dil seçmiş: {user_lang}, abonelik mesajı göster")
             subscription.show_subscription_required(message.chat.id, user_id, user_lang)
         else:
             # Dil seçimi göster
-            print(f"   🌐 Dil seçimi göster")
             show_language_selection(message)
 
 def show_language_selection(message):
@@ -149,16 +156,25 @@ def show_welcome_message(message, lang_code=None):
     )
 
 def on_subscription_complete(message, user_id):
-    """Abonelik tamamlandığında çağrılır"""
-    print(f"🎉 Abonelik tamamlandı: {user_id}")
-    
-    # Eski bekleyen mesajları temizle
+    """Abonelik tamamlandığında çağrılır (butonla)"""
     subscription.cleanup_pending_message(user_id)
-    
-    # Kullanıcı dilini al ve hoşgeldin mesajını göster
     user_lang = diller.get_user_language(user_id) or 'tr'
     show_welcome_message(message, user_lang)
 
+def on_subscription_complete_auto(chat_id, user_id, lang_code):
+    """Otomatik abonelik tamamlandığında çağrılır"""
+    subscription.cleanup_pending_message(user_id)
+    
+    # Fake message oluştur
+    class FakeMessage:
+        def __init__(self, chat_id, user_id):
+            self.chat = type('obj', (object,), {'id': chat_id})
+            self.from_user = type('obj', (object,), {'id': user_id})
+    
+    fake_msg = FakeMessage(chat_id, user_id)
+    show_welcome_message(fake_msg, lang_code)
+
+# /help komutu (önceki gibi kalacak)
 @bot.message_handler(commands=['help', 'yardim', 'h'])
 def help_command(message):
     """Yardım komutu"""
@@ -217,8 +233,6 @@ def handle_language_selection(call):
     user_id = call.from_user.id
     lang_code = call.data.replace('lang_', '')
     
-    print(f"🌐 Dil seçimi: {user_id} -> {lang_code}")
-    
     if lang_code in diller.DILLER:
         # Dil tercihini kaydet
         diller.set_user_language(user_id, lang_code)
@@ -236,23 +250,16 @@ def handle_language_selection(call):
         # ADMIN kontrolü
         if str(user_id) == ADMIN_ID:
             # Admin için direkt hoşgeldin
-            print(f"   👑 Admin, hoşgeldin göster")
             show_welcome_message(call.message, lang_code)
         else:
             # Normal kullanıcı için abonelik kontrolü
-            print(f"   👤 Normal kullanıcı, abonelik kontrolü")
-            
-            # Önce abone mi kontrol et
             is_subscribed = subscription.is_user_subscribed(user_id)
-            print(f"   📊 Abonelik durumu: {is_subscribed}")
             
             if is_subscribed:
                 # Zaten abone, direkt hoşgeldin
-                print(f"   ✅ Zaten abone, hoşgeldin göster")
                 show_welcome_message(call.message, lang_code)
             else:
                 # Abone değil, abonelik mesajı göster
-                print(f"   ❌ Abone değil, abonelik mesajı göster")
                 subscription.show_subscription_required(call.message.chat.id, user_id, lang_code)
 
 @bot.callback_query_handler(func=lambda call: call.data == 'check_subscription')
@@ -260,6 +267,7 @@ def handle_check_subscription(call):
     """Abonelik kontrol butonu"""
     subscription.handle_subscription_check(call)
 
+# Diğer komutlar (önceki gibi)
 @bot.message_handler(commands=['language', 'dil'])
 def change_language(message):
     show_language_selection(message)
@@ -295,23 +303,14 @@ def stats_command(message):
             f"• 🔑 Admin ID: {ADMIN_ID}",
             parse_mode='Markdown'
         )
-    else:
-        lang_data = diller.get_language_data(message.from_user.id)
-        bot.reply_to(
-            message,
-            f"⛔ {lang_data.get('help_command', 'Yardım için')} /help"
-        )
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_all_callbacks(call):
     if call.data.startswith('lang_'):
-        # Dil seçimi - yukarıda handle ediliyor
         pass
     elif call.data == 'check_subscription':
-        # Abonelik kontrolü - yukarıda handle ediliyor
         pass
     else:
-        # Diğer callback'ler (duyuru)
         duyuru.handle_duyuru_callbacks(call)
 
 @bot.message_handler(content_types=['photo'])
@@ -335,6 +334,9 @@ if __name__ == "__main__":
     # Duyuru modülünü başlat
     duyuru.init_bot(bot, users)
     
+    # Otomatik abonelik kontrolünü başlat
+    start_auto_checker()
+    
     print("=" * 60)
     print("🤖 PROMPT BOTU BAŞLATILDI")
     print(f"🔑 Admin ID: {ADMIN_ID}")
@@ -342,9 +344,10 @@ if __name__ == "__main__":
     print(f"🌍 Diller: {len(diller.DILLER)} dil")
     print("=" * 60)
     print("✅ Zorunlu Abonelik Sistemi AKTİF")
-    print("📋 Akış: Dil Seçimi → Abonelik Kontrolü → Hoşgeldin")
+    print("📋 Sadece 1 kanal: @sndiyi")
+    print("🔘 2 buton: Kanal + Abone Oldum")
+    print("🤖 Otomatik kontrol: Her 5 saniyede bir")
     print("👑 Admin: Abonelik gerekmez")
-    print("🔄 Otomatik kontrol: Abone olunca mesaj silinir")
     print("=" * 60)
     
     bot.infinity_polling()
