@@ -8,29 +8,27 @@ import threading
 import time
 
 TOKEN = os.getenv('BOT_TOKEN')
-ADMIN_ID = "5541236874"  # TIRNAK İÇİNDE
+ADMIN_ID = "5541236874"
 
 bot = telebot.TeleBot(TOKEN)
 
 # Tüm kullanıcıları sakla
 users = set()
+# Kullanıcı chat ID'lerini sakla {user_id: chat_id}
+user_chats = {}
 
 # Bot'u subscription modülüne ver
 subscription.init_bot(bot)
 
-def start_auto_checker():
-    """Otomatik abonelik kontrolü başlat"""
-    def checker():
-        while True:
-            try:
-                subscription.auto_check_subscription()
-            except Exception as e:
-                print(f"Otomatik kontrol hatası: {e}")
-            time.sleep(5)  # Her 5 saniyede bir kontrol et
-    
-    thread = threading.Thread(target=checker, daemon=True)
-    thread.start()
-    print("✅ Otomatik abonelik kontrolü başlatıldı")
+def start_auto_checkers():
+    """Otomatik kontrolleri başlat"""
+    # Kanaldan ayrılma kontrolü
+    subscription.start_unsubscribe_checker()
+    print("✅ Otomatik kontroller başlatıldı")
+
+def get_user_chat_id(user_id):
+    """Kullanıcının chat ID'sini getir"""
+    return user_chats.get(user_id)
 
 def create_language_keyboard():
     """Dil seçim klavyesi oluştur"""
@@ -72,12 +70,15 @@ def create_welcome_buttons(lang_data):
 @bot.message_handler(commands=['start'])
 def start_command(message):
     user_id = message.from_user.id
+    chat_id = message.chat.id
     users.add(user_id)
+    user_chats[user_id] = chat_id
     
-    print(f"🚀 /start: {user_id} (Admin: {str(user_id) == ADMIN_ID})")
+    print(f"🚀 /start: {user_id}")
     
     # ADMIN için direkt devam et
     if str(user_id) == ADMIN_ID:
+        subscription.add_active_user(user_id)
         user_lang = diller.get_user_language(user_id)
         if user_lang:
             show_welcome_message(message, user_lang)
@@ -85,11 +86,14 @@ def start_command(message):
             show_language_selection(message)
         return
     
-    # NORMAL KULLANICI için abonelik kontrolü
-    is_subscribed = subscription.is_user_subscribed(user_id)
+    # Aktif kullanıcı olarak işaretle
+    subscription.add_active_user(user_id)
+    
+    # GERÇEK ZAMANLI abonelik kontrolü (cache bypass)
+    is_subscribed = subscription.check_subscription_real_time(user_id)
     
     if is_subscribed:
-        # Zaten abone, normal akış
+        # Abone, normal akış
         user_lang = diller.get_user_language(user_id)
         if user_lang:
             show_welcome_message(message, user_lang)
@@ -100,7 +104,7 @@ def start_command(message):
         user_lang = diller.get_user_language(user_id)
         if user_lang:
             # Dil seçmiş, direkt abonelik mesajı göster
-            subscription.show_subscription_required(message.chat.id, user_id, user_lang)
+            subscription.show_subscription_required(chat_id, user_id, user_lang)
         else:
             # Dil seçimi göster
             show_language_selection(message)
@@ -158,33 +162,24 @@ def show_welcome_message(message, lang_code=None):
 def on_subscription_complete(message, user_id):
     """Abonelik tamamlandığında çağrılır (butonla)"""
     subscription.cleanup_pending_message(user_id)
+    subscription.add_active_user(user_id)
+    
+    # HEMEN hoşgeldin mesajını göster
     user_lang = diller.get_user_language(user_id) or 'tr'
     show_welcome_message(message, user_lang)
 
-def on_subscription_complete_auto(chat_id, user_id, lang_code):
-    """Otomatik abonelik tamamlandığında çağrılır"""
-    subscription.cleanup_pending_message(user_id)
-    
-    # Fake message oluştur
-    class FakeMessage:
-        def __init__(self, chat_id, user_id):
-            self.chat = type('obj', (object,), {'id': chat_id})
-            self.from_user = type('obj', (object,), {'id': user_id})
-    
-    fake_msg = FakeMessage(chat_id, user_id)
-    show_welcome_message(fake_msg, lang_code)
-
-# /help komutu (önceki gibi kalacak)
+# /help komutu (kısa tutalım)
 @bot.message_handler(commands=['help', 'yardim', 'h'])
 def help_command(message):
-    """Yardım komutu"""
+    """Kısa yardım komutu"""
     user_id = message.from_user.id
-    is_admin = (str(user_id) == ADMIN_ID)
+    
+    # Aktif kullanıcı olarak işaretle
+    subscription.add_active_user(user_id)
     
     lang_data = diller.get_language_data(user_id)
     user_name = diller.format_user_name(message.from_user)
     
-    # 3 butonlu klavye
     markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(
         types.InlineKeyboardButton(
@@ -194,32 +189,17 @@ def help_command(message):
         types.InlineKeyboardButton(
             lang_data.get('button_prompts', 'Prompts'), 
             url=lang_data['prompts_url']
-        ),
-        types.InlineKeyboardButton(
-            lang_data.get('button_support', 'Destek'), 
-            url=lang_data['support_url']
         )
     )
     
     help_text = f"""<b>{lang_data.get('help_greeting', 'Merhaba').format(name=user_name)}</b>
 
-<b>{lang_data.get('help_info_title', 'Botumuz hakkında bilgiler')}</b>
-• {lang_data.get('help_bot_for', 'Bot promptslar içindir')}
-• {lang_data.get('help_prompts_info', 'Hazır promptlar sadece kopyala yapıştır')}
+<b>Komutlar:</b>
+• /start - Botu başlat
+• /help - Yardım
+• /language - Dil değiştir
 
-<b>{lang_data.get('help_commands_title', 'Komutlar')}</b>
-• {lang_data.get('help_start_cmd', '/start - Botu çalıştırmak için')}
-• {lang_data.get('help_help_cmd', '/help - Yardım için')}
-
-<b>✨ {lang_data.get('help_prompts_access', 'Promptlara erişmek için prompts butonuna tıklayın')}</b>
-<b>ℹ️ {lang_data.get('help_more_info', 'Daha fazla bilgi için aşağıdaki butonlara tıklayın')}</b>"""
-    
-    if is_admin:
-        help_text += f"""
-
-<b>👑 Admin Komutları:</b>
-• /send - Duyuru gönder
-• /stats - İstatistikler"""
+<b>Promptlar için:</b>"""
     
     bot.send_message(
         message.chat.id,
@@ -231,6 +211,10 @@ def help_command(message):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('lang_'))
 def handle_language_selection(call):
     user_id = call.from_user.id
+    
+    # Aktif kullanıcı olarak işaretle
+    subscription.add_active_user(user_id)
+    
     lang_code = call.data.replace('lang_', '')
     
     if lang_code in diller.DILLER:
@@ -249,17 +233,14 @@ def handle_language_selection(call):
         
         # ADMIN kontrolü
         if str(user_id) == ADMIN_ID:
-            # Admin için direkt hoşgeldin
             show_welcome_message(call.message, lang_code)
         else:
-            # Normal kullanıcı için abonelik kontrolü
-            is_subscribed = subscription.is_user_subscribed(user_id)
+            # GERÇEK ZAMANLI abonelik kontrolü
+            is_subscribed = subscription.check_subscription_real_time(user_id)
             
             if is_subscribed:
-                # Zaten abone, direkt hoşgeldin
                 show_welcome_message(call.message, lang_code)
             else:
-                # Abone değil, abonelik mesajı göster
                 subscription.show_subscription_required(call.message.chat.id, user_id, lang_code)
 
 @bot.callback_query_handler(func=lambda call: call.data == 'check_subscription')
@@ -267,9 +248,10 @@ def handle_check_subscription(call):
     """Abonelik kontrol butonu"""
     subscription.handle_subscription_check(call)
 
-# Diğer komutlar (önceki gibi)
 @bot.message_handler(commands=['language', 'dil'])
 def change_language(message):
+    user_id = message.from_user.id
+    subscription.add_active_user(user_id)
     show_language_selection(message)
 
 @bot.message_handler(commands=['send'])
@@ -315,12 +297,15 @@ def handle_all_callbacks(call):
 
 @bot.message_handler(content_types=['photo'])
 def handle_photos(message):
+    user_id = message.from_user.id
+    subscription.add_active_user(user_id)
     duyuru.process_duyuru_photo(message)
 
 @bot.message_handler(func=lambda message: True)
 def handle_all_messages(message):
     user_id = message.from_user.id
     users.add(user_id)
+    subscription.add_active_user(user_id)
     
     if not message.text.startswith('/'):
         lang_data = diller.get_language_data(user_id)
@@ -334,20 +319,18 @@ if __name__ == "__main__":
     # Duyuru modülünü başlat
     duyuru.init_bot(bot, users)
     
-    # Otomatik abonelik kontrolünü başlat
-    start_auto_checker()
+    # Otomatik kontrolleri başlat
+    start_auto_checkers()
     
     print("=" * 60)
     print("🤖 PROMPT BOTU BAŞLATILDI")
     print(f"🔑 Admin ID: {ADMIN_ID}")
     print(f"👥 Kullanıcı: {len(users)}")
-    print(f"🌍 Diller: {len(diller.DILLER)} dil")
     print("=" * 60)
-    print("✅ Zorunlu Abonelik Sistemi AKTİF")
-    print("📋 Sadece 1 kanal: @sndiyi")
-    print("🔘 2 buton: Kanal + Abone Oldum")
-    print("🤖 Otomatik kontrol: Her 5 saniyede bir")
-    print("👑 Admin: Abonelik gerekmez")
+    print("✅ GERÇEK ZAMANLI Abonelik Kontrolü")
+    print("✅ Kanaldan ayrılma tespiti (her 1 dakikada)")
+    print("✅ Otomatik hoşgeldin mesajı")
+    print("✅ Sadeleştirilmiş abonelik mesajı")
     print("=" * 60)
     
     bot.infinity_polling()
