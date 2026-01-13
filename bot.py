@@ -5,7 +5,7 @@ from telebot import types
 # Token'i al
 TOKEN = os.getenv('BOT_TOKEN')
 # ADMIN_ID'yi buraya kendi Telegram ID'nizi yazın (Bunu nasıl bulacağınızı aşağıda anlattım)
-ADMIN_ID = "BURAYA_SIZIN_TELEGRAM_ID_NIZI_YAZIN"  # Örnek: "123456789"
+ADMIN_ID = "5541236874"  # Örnek: "123456789"
 
 bot = telebot.TeleBot(TOKEN)
 
