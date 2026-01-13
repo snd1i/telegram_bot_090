@@ -21,7 +21,7 @@ DILLER = {
         'help_commands_title': 'تایبەت مەندی 📌',
         'help_start_cmd': '/start - بو کار کرنا بوتی',
         'help_help_cmd': '/help - ژبو هاریکاریێ',
-        'help_prompts_access': 'بو بدەستفە ینانا کودا تبلا خول prompts یان پرومت بدە 🔥',
+        'help_prompts_access': 'بو بدەستفە ینانا کودا تبلا خول کودێن وێنا یان پرومت بدە 🔥',
         'help_more_info': 'بو بدەستفە ینانا پتر زانیاریا تبلا خول دکمێن خارێ بدە ℹ️',
         'help_command': 'ژبو هاریکاریێ',
         # Butonlar
