@@ -5,7 +5,7 @@ import duyuru
 import diller
 
 TOKEN = os.getenv('BOT_TOKEN')
-ADMIN_ID = "5541236874"
+ADMIN_ID = "BURAYA_SIZIN_TELEGRAM_ID_NIZI_YAZIN"
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -30,6 +30,24 @@ def create_language_keyboard():
             markup.row(buttons[i], buttons[i + 1])
         else:
             markup.row(buttons[i])
+    
+    return markup
+
+def create_welcome_buttons(lang_data):
+    """Hoşgeldin mesajı butonlarını oluştur"""
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    
+    # İki buton
+    markup.add(
+        types.InlineKeyboardButton(
+            lang_data['button_channel'], 
+            url=lang_data['channel_url']
+        ),
+        types.InlineKeyboardButton(
+            lang_data['button_prompts'], 
+            url=lang_data['prompts_url']
+        )
+    )
     
     return markup
 
@@ -62,7 +80,7 @@ def show_language_selection(message):
     )
 
 def show_welcome_message(message, lang_code=None):
-    """Hoş geldin mesajını göster"""
+    """Hoş geldin mesajını göster (YENİ VERSİYON)"""
     user_id = message.from_user.id
     
     if not lang_code:
@@ -70,37 +88,32 @@ def show_welcome_message(message, lang_code=None):
     
     lang_data = diller.DILLER.get(lang_code, diller.DILLER['tr'])
     
+    # Kullanıcı adını hazırla
+    user_name = diller.format_user_name(message.from_user)
+    
+    # Butonları oluştur
+    markup = create_welcome_buttons(lang_data)
+    
+    # Hoşgeldin mesajını oluştur
+    welcome_text = f"""
+{lang_data['welcome_title'].format(name=user_name)}
+
+{lang_data['welcome_line1']}
+{lang_data['welcome_line2']}
+
+{lang_data['welcome_line3']}
+• {lang_data['welcome_line4']}
+• {lang_data['welcome_line5']}
+• {lang_data['welcome_line6']}
+
+{lang_data['welcome_line7']}
+{lang_data['welcome_line8']}
+"""
+    
     # Admin ise istatistik ekle
     if str(user_id) == ADMIN_ID:
-        welcome_text = f"""
-{lang_data['welcome']} 👋
-
-{lang_data['description']}
-
-📊 **Admin Statistics:**
-• 👥 Total users: {len(users)}
-• 🔧 Send prompts: /send
-• 🌐 Language: {lang_data['name']}
-"""
-    else:
-        welcome_text = f"""
-{lang_data['welcome']} 👋
-
-{lang_data['description']}
-
-🌐 {lang_data['language']}: {lang_data['name']}
-"""
-    
-    # Ana menü butonları
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    
-    if str(user_id) == ADMIN_ID:
-        markup.row(types.KeyboardButton(f"📤 {lang_data['start']}"))
-    
-    markup.row(
-        types.KeyboardButton(f"🌐 {lang_data['language']}"),
-        types.KeyboardButton(f"❓ {lang_data['help']}")
-    )
+        admin_stats = f"\n\n📊 **Admin İstatistik:**\n• 👥 Toplam kullanıcı: {len(users)}\n• 🔧 Duyuru gönder: /send"
+        welcome_text += admin_stats
     
     bot.send_message(
         message.chat.id,
@@ -122,7 +135,7 @@ def handle_language_selection(call):
         # Callback mesajını güncelle
         lang_data = diller.DILLER[lang_code]
         bot.edit_message_text(
-            f"✅ {lang_data['language']}: {lang_data['name']}",
+            f"✅ {lang_data['name']}",
             call.message.chat.id,
             call.message.message_id
         )
@@ -139,24 +152,30 @@ def change_language(message):
 def send_command(message):
     user_id = message.from_user.id
     
-    # Kullanıcı dilini al
-    lang_code = diller.get_user_language(user_id) or 'tr'
-    lang_data = diller.DILLER.get(lang_code, diller.DILLER['tr'])
-    
     if str(user_id) != ADMIN_ID:
-        bot.reply_to(
-            message, 
-            f"⛔ {lang_data['choose']} {lang_data['help']} /help"
-        )
+        bot.reply_to(message, "⛔ Bu komutu kullanma yetkiniz yok.")
         return
     
     msg = bot.send_message(
         message.chat.id,
-        f"📝 **{lang_data['start']}**\n\n"
-        f"{lang_data['description']}",
+        "📝 **Duyuru metnini yazın:**\n\n"
+        "Yazdıktan sonra gönder butonuna basın.",
         parse_mode='Markdown'
     )
     bot.register_next_step_handler(msg, duyuru.process_duyuru_text)
+
+@bot.message_handler(commands=['stats'])
+def stats_command(message):
+    # SADECE ADMIN istatistik görebilir
+    if str(message.from_user.id) == ADMIN_ID:
+        bot.reply_to(
+            message,
+            f"📊 **Admin İstatistikleri**\n\n"
+            f"• 👥 Toplam Kullanıcı: {len(users)}\n"
+            f"• 🤖 Bot Durumu: Aktif\n"
+            f"• 🔑 Admin ID: {ADMIN_ID}",
+            parse_mode='Markdown'
+        )
 
 # Diğer callback'ler
 @bot.callback_query_handler(func=lambda call: True)
@@ -176,33 +195,32 @@ def handle_all_messages(message):
     user_id = message.from_user.id
     users.add(user_id)
     
-    lang_code = diller.get_user_language(user_id) or 'tr'
-    lang_data = diller.DILLER.get(lang_code, diller.DILLER['tr'])
-    
     # Dil değiştirme butonu
     if "🌐" in message.text:
         show_language_selection(message)
     
     # Yardım butonu
     elif "❓" in message.text:
+        lang_data = diller.get_language_data(user_id)
         bot.reply_to(
             message,
-            f"ℹ️ **{lang_data['help']}**\n\n"
-            f"• {lang_data['start']}: /start\n"
-            f"• {lang_data['language']}: /language\n"
+            f"ℹ️ **Yardım**\n\n"
+            f"• Başlat: /start\n"
+            f"• Dil değiştir: /language\n"
             f"• {lang_data['description']}",
             parse_mode='Markdown'
         )
     
-    # Başlat butonu (sadece admin)
+    # Duyuru gönder butonu (sadece admin)
     elif "📤" in message.text and str(user_id) == ADMIN_ID:
         send_command(message)
     
     else:
+        lang_data = diller.get_language_data(user_id)
         bot.reply_to(
             message,
-            f"🤖 {lang_data['description']}\n\n"
-            f"{lang_data['help']}: /help"
+            f"🤖 {lang_data['welcome_line2']}\n\n"
+            f"Yardım için: /help"
         )
 
 if __name__ == "__main__":
