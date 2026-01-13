@@ -14,8 +14,11 @@ DILLER = {
         'welcome_line8': 'بو بدەستفە ینانێ دکما ل خارێ کلیک بکە 👇',
         'button_channel': 'کەنال',
         'button_prompts': 'كودێن وێنا 🔥',
+        'button_support': 'هاریکاری',
+        'help_command': 'ژبو هاریکاریێ',
         'channel_url': 'https://t.me/sndiyi',
-        'prompts_url': 'https://t.me/PrompttAI_bot/Prompts'
+        'prompts_url': 'https://t.me/PrompttAI_bot/Prompts',
+        'support_url': 'https://t.me/k4miran_sndi'
     },
     'ku_sorani': {
         'code': 'ku_sorani',
@@ -31,8 +34,11 @@ DILLER = {
         'welcome_line8': 'بۆ دەستگەیشتن کرتە لە دووگمەکانی خوارەوە بکە 👇',
         'button_channel': 'کەناڵ',
         'button_prompts': 'پرۆمپتەکان 🔥',
+        'button_support': 'یارمەتی',
+        'help_command': 'بۆ یارمەتی',
         'channel_url': 'https://t.me/sndiyi',
-        'prompts_url': 'https://t.me/PrompttAI_bot/Prompts'
+        'prompts_url': 'https://t.me/PrompttAI_bot/Prompts',
+        'support_url': 'https://t.me/k4miran_sndi'
     },
     'tr': {
         'code': 'tr',
@@ -48,8 +54,11 @@ DILLER = {
         'welcome_line8': 'erişmek için aşağıdaki butonlara tıklayın 👇',
         'button_channel': 'metin kanal',
         'button_prompts': 'metin prompts 🔥',
+        'button_support': 'destek',
+        'help_command': 'Yardım için',
         'channel_url': 'https://t.me/sndiyi',
-        'prompts_url': 'https://t.me/PrompttAI_bot/Prompts'
+        'prompts_url': 'https://t.me/PrompttAI_bot/Prompts',
+        'support_url': 'https://t.me/k4miran_sndi'
     },
     'en': {
         'code': 'en',
@@ -65,8 +74,11 @@ DILLER = {
         'welcome_line8': 'click the buttons below to access 👇',
         'button_channel': 'text channel',
         'button_prompts': 'text prompts 🔥',
+        'button_support': 'support',
+        'help_command': 'For help',
         'channel_url': 'https://t.me/sndiyi',
-        'prompts_url': 'https://t.me/PrompttAI_bot/Prompts'
+        'prompts_url': 'https://t.me/PrompttAI_bot/Prompts',
+        'support_url': 'https://t.me/k4miran_sndi'
     },
     'ar': {
         'code': 'ar',
@@ -82,8 +94,11 @@ DILLER = {
         'welcome_line8': 'انقر على الأزرار أدناه للوصول 👇',
         'button_channel': 'قناة النصوص',
         'button_prompts': 'برومبتات النصوص 🔥',
+        'button_support': 'الدعم',
+        'help_command': 'للمساعدة',
         'channel_url': 'https://t.me/sndiyi',
-        'prompts_url': 'https://t.me/PrompttAI_bot/Prompts'
+        'prompts_url': 'https://t.me/PrompttAI_bot/Prompts',
+        'support_url': 'https://t.me/k4miran_sndi'
     }
 }
 
@@ -120,4 +135,13 @@ def format_user_name(user):
     elif user.last_name:
         return user.last_name
     else:
-        return "Arkadaş"
+        if get_user_language(user.id) == 'ku_badini':
+            return "هەڤال"
+        elif get_user_language(user.id) == 'ku_sorani':
+            return "هاوڕێ"
+        elif get_user_language(user.id) == 'ar':
+            return "صديق"
+        elif get_user_language(user.id) == 'en':
+            return "Friend"
+        else:
+            return "Arkadaş"
