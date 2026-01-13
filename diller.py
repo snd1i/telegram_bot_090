@@ -3,67 +3,87 @@ DILLER = {
     'ku_badini': {
         'code': 'ku_badini',
         'name': 'Kurdî (Badînî) 🇹🇯',
-        'welcome': 'خێرهاتی بو ناف بوتێ پرومپتا',
-        'select_language': 'زمانەکێ هەلبژێرە',
-        'description': 'ئەف بوتە بو پرومتسایە',
-        'menu': 'دەسپێک',
-        'help': 'هاریکاری',
-        'start': 'بدەکاری',
-        'exit': 'دەرکەتن',
-        'language': 'زمان',
-        'choose': 'هەلبژێرە'
+        'welcome_title': '🌟 خێرهاتی بەرێز {name}!',
+        'welcome_line1': 'کەیڤ خوشن ب هاتنا هەوە.',
+        'welcome_line2': 'د نافا بوتی دا نەب تنێ وێنە بەلکو چاوانیا دروست کرنا وان وێنا بەلاڤ دکن او نفیسینا وێنە پێ دهێن چێکرن. 🎨',
+        'welcome_line3': '🎨 چاوا دێ بکار ینی',
+        'welcome_line4': 'او نفیسینا دبن وێنادا "پرومت" دێ کوپی کی.',
+        'welcome_line5': 'او ژێریا دەستکرد یاتو بکار دینی بو نمونە (gemini / chatgpt) ێک ژفان بکار بینە.',
+        'welcome_line6': 'ستایلێ خو چێکە!',
+        'welcome_line7': 'داخازا دەمێت خوش 🚀',
+        'welcome_line8': 'بو بدەستفە ینانێ دکما ل خارێ کلیک بکە 👇',
+        'button_channel': 'کەنال',
+        'button_prompts': 'كودێن وێنا 🔥',
+        'channel_url': 'https://t.me/sndiyi',
+        'prompts_url': 'https://t.me/PrompttAI_bot/Prompts'
     },
     'ku_sorani': {
         'code': 'ku_sorani',
         'name': 'کوردی (سۆرانی) 🇹🇯',
-        'welcome': 'بەخێربێیت بۆ بۆتی پرۆمپت',
-        'select_language': 'زمان هەڵبژێرە',
-        'description': 'ئەم بۆتە بۆ پرۆمپتە',
-        'menu': 'مەینۆی سەرەکی',
-        'help': 'یارمەتی',
-        'start': 'دەستپێکردن',
-        'exit': 'دەرچوون',
-        'language': 'زمان',
-        'choose': 'هەڵبژێرە'
+        'welcome_title': '🌟 بەخێربێیت بۆ {name}!',
+        'welcome_line1': 'زۆر دڵخۆشین کە لێرە چاوی پێت دەکەوین.',
+        'welcome_line2': 'لەم بۆتەدا تەنها وێنە ناگەیێنین، بەڵکو "نهێنییەکانی" پشتی وێنەکان واتە پرۆمپتەکانیش هاوبەش دەکەین. 🎨',
+        'welcome_line3': '🎨 چۆن دەستپێبکەم؟',
+        'welcome_line4': 'پرۆمپتەکەی خوارەوەی وێنە کۆپی بکە.',
+        'welcome_line5': 'لە ئامرازی هەوەڵی خۆتدا (gemini / chatgpt) تاقی بکەوە.',
+        'welcome_line6': 'ستایلەکەی خۆت دروست بکە!',
+        'welcome_line7': 'گەڕانێکی خۆش! 🚀',
+        'welcome_line8': 'بۆ دەستگەیشتن کرتە لە دووگمەکانی خوارەوە بکە 👇',
+        'button_channel': 'کەناڵ',
+        'button_prompts': 'پرۆمپتەکان 🔥',
+        'channel_url': 'https://t.me/sndiyi',
+        'prompts_url': 'https://t.me/PrompttAI_bot/Prompts'
     },
     'tr': {
         'code': 'tr',
         'name': 'Türkçe 🇹🇷',
-        'welcome': 'Prompt Botuna Hoş Geldiniz',
-        'select_language': 'Dil seçin',
-        'description': 'Bu bot ile promptlar alacaksınız',
-        'menu': 'Ana menü',
-        'help': 'Yardım',
-        'start': 'Başlat',
-        'exit': 'Çıkış',
-        'language': 'Dil',
-        'choose': 'Seç'
+        'welcome_title': '🌟 Aramıza Hoş Geldin {name}!',
+        'welcome_line1': 'Seninle burada buluştuğumuz için çok mutluyuz.',
+        'welcome_line2': 'Botumuzda sadece resim paylaşmıyoruz, aynı zamanda bu resimlerin arkasındaki "sırları" yani promptları da seninle bölüşüyoruz. 🎨',
+        'welcome_line3': '🎨 Nasıl Başlarım?',
+        'welcome_line4': 'Paylaşılan resimlerin altındaki "Prompt" kısmını kopyala.',
+        'welcome_line5': 'Kendi favori AI aracında (gemini / chatgpt) dene.',
+        'welcome_line6': 'Kendi tarzını yarat!',
+        'welcome_line7': 'Keyifli keşifler! 🚀',
+        'welcome_line8': 'erişmek için aşağıdaki butonlara tıklayın 👇',
+        'button_channel': 'metin kanal',
+        'button_prompts': 'metin prompts 🔥',
+        'channel_url': 'https://t.me/sndiyi',
+        'prompts_url': 'https://t.me/PrompttAI_bot/Prompts'
     },
     'en': {
         'code': 'en',
         'name': 'English 🇬🇧',
-        'welcome': 'Welcome to Prompt Bot',
-        'select_language': 'Select language',
-        'description': 'You will receive prompts through this bot',
-        'menu': 'Main menu',
-        'help': 'Help',
-        'start': 'Start',
-        'exit': 'Exit',
-        'language': 'Language',
-        'choose': 'Choose'
+        'welcome_title': '🌟 Welcome {name}!',
+        'welcome_line1': 'We are very happy to meet you here.',
+        'welcome_line2': 'In our bot, we not only share images but also share the "secrets" behind these images, i.e., the prompts. 🎨',
+        'welcome_line3': '🎨 How Do I Start?',
+        'welcome_line4': 'Copy the "Prompt" section under the shared images.',
+        'welcome_line5': 'Try it in your favorite AI tool (gemini / chatgpt).',
+        'welcome_line6': 'Create your own style!',
+        'welcome_line7': 'Happy exploring! 🚀',
+        'welcome_line8': 'click the buttons below to access 👇',
+        'button_channel': 'text channel',
+        'button_prompts': 'text prompts 🔥',
+        'channel_url': 'https://t.me/sndiyi',
+        'prompts_url': 'https://t.me/PrompttAI_bot/Prompts'
     },
     'ar': {
         'code': 'ar',
         'name': 'العربية 🇮🇶',
-        'welcome': 'مرحبًا بك في بوت البرومبت',
-        'select_language': 'اختر اللغة',
-        'description': 'ستتلقى برومبتات من خلال هذا البوت',
-        'menu': 'القائمة الرئيسية',
-        'help': 'مساعدة',
-        'start': 'بدء',
-        'exit': 'خروج',
-        'language': 'لغة',
-        'choose': 'اختر'
+        'welcome_title': '🌟 أهلاً وسهلاً {name}!',
+        'welcome_line1': 'نحن سعداء جدًا بلقائك هنا.',
+        'welcome_line2': 'في بوتنا، لا نشارك الصور فقط، بل نشارك أيضًا "أسرار" هذه الصور، أي البرومبتات. 🎨',
+        'welcome_line3': '🎨 كيف أبدأ؟',
+        'welcome_line4': 'انسخ قسم "البرومبت" تحت الصور المشتركة.',
+        'welcome_line5': 'جربه في أداتك المفضلة للذكاء الاصطناعي (gemini / chatgpt).',
+        'welcome_line6': 'أنشئ أسلوبك الخاص!',
+        'welcome_line7': 'استكشاف سعيد! 🚀',
+        'welcome_line8': 'انقر على الأزرار أدناه للوصول 👇',
+        'button_channel': 'قناة النصوص',
+        'button_prompts': 'برومبتات النصوص 🔥',
+        'channel_url': 'https://t.me/sndiyi',
+        'prompts_url': 'https://t.me/PrompttAI_bot/Prompts'
     }
 }
 
@@ -81,13 +101,23 @@ def set_user_language(user_id, lang_code):
         return True
     return False
 
-def get_language_text(user_id, key):
-    """Kullanıcı diline göre metin getir"""
+def get_language_data(user_id):
+    """Kullanıcı diline göre dil verilerini getir"""
     lang_code = get_user_language(user_id)
     
     # Eğer dil tercihi yoksa, Türkçe varsayılan
     if not lang_code:
         lang_code = 'tr'
     
-    lang_data = DILLER.get(lang_code, DILLER['tr'])
-    return lang_data.get(key, '')
+    return DILLER.get(lang_code, DILLER['tr'])
+
+def format_user_name(user):
+    """Kullanıcı adını formatla"""
+    if user.username:
+        return f"@{user.username}"
+    elif user.first_name:
+        return user.first_name
+    elif user.last_name:
+        return user.last_name
+    else:
+        return "Arkadaş"
