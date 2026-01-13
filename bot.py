@@ -4,57 +4,47 @@ from telebot import types
 import time
 
 TOKEN = os.getenv('BOT_TOKEN')
-ADMIN_ID = "5541236874"  # Örnek: "123456789"
+ADMIN_ID = "BURAYA_SIZIN_TELEGRAM_ID_NIZI_YAZIN"  # Örnek: "123456789"
 
 bot = telebot.TeleBot(TOKEN)
 
-# Kullanıcı veritabanı (basit versiyon)
-user_db = {
-    'users': set(),
-    'stats': {'total_messages': 0, 'last_announcement': None}
-}
+# Kullanıcı veritabanı
+user_db = {'users': set()}
+
+# Aktif duyuru verisi
+active_announcement = None
 
 @bot.message_handler(commands=['start'])
 def start(message):
     user_id = message.from_user.id
     user_db['users'].add(user_id)
-    user_db['stats']['total_messages'] += 1
     
-    welcome_text = """
-    🎉 **Hoş Geldiniz!**
-    
-    Bu bot, duyuruları almak için kullanılır.
-    
-    📊 **Bot İstatistikleri:**
-    • Toplam Kullanıcı: {}
-    • Son Duyuru: {}
-    
-    ⚠️ **Not:** Sadece yönetici duyuru gönderebilir.
-    """.format(
-        len(user_db['users']),
-        user_db['stats']['last_announcement'] or "Henüz yok"
+    bot.reply_to(
+        message,
+        "🤖 **Duyuru Botu Aktif!**\n\n"
+        "Bu bot ile duyurular alacaksınız.\n"
+        f"📊 Aktif kullanıcı: {len(user_db['users'])}",
+        parse_mode='Markdown'
     )
-    
-    bot.reply_to(message, welcome_text, parse_mode='Markdown')
 
 @bot.message_handler(commands=['duyuru'])
 def duyuru_menu(message):
     user_id = str(message.from_user.id)
     
     if user_id != ADMIN_ID:
-        bot.reply_to(message, "⛔ Yetkiniz yok. Sadece yönetici duyuru gönderebilir.")
+        bot.reply_to(message, "⛔ Yetkiniz yok.")
         return
     
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     btn1 = types.KeyboardButton('📢 Duyuru Gönder')
-    btn2 = types.KeyboardButton('📊 İstatistikler')
+    btn2 = types.KeyboardButton('📊 İstatistik')
     btn3 = types.KeyboardButton('❌ İptal')
     markup.add(btn1, btn2, btn3)
     
     bot.send_message(
         message.chat.id,
         "🏢 **Duyuru Paneli**\n\n"
-        "Aşağıdaki seçeneklerden birini seçin:",
+        "Ne yapmak istiyorsunuz?",
         reply_markup=markup,
         parse_mode='Markdown'
     )
@@ -64,233 +54,290 @@ def start_announcement(message):
     msg = bot.send_message(
         message.chat.id,
         "✏️ **Duyuru metnini yazın:**\n\n"
-        "• Başlık ve içerik\n"
-        "• Emojiler kullanabilirsiniz\n"
-        "• Markdown formatı desteklenir\n\n"
         "Örnek:\n"
-        "*Yeni Güncelleme!*\n"
-        "Bugün sistem bakımı yapılacaktır.",
+        "*YENİ DUYURU*\n"
+        "Bugün bakım yapılacaktır.",
         reply_markup=types.ReplyKeyboardRemove(),
         parse_mode='Markdown'
     )
-    bot.register_next_step_handler(msg, get_announcement_text)
+    bot.register_next_step_handler(msg, process_announcement_text)
 
-def get_announcement_text(message):
+def process_announcement_text(message):
+    global active_announcement
+    
     if message.text == '/cancel':
-        bot.send_message(message.chat.id, "❌ İşlem iptal edildi.", reply_markup=types.ReplyKeyboardRemove())
+        bot.send_message(message.chat.id, "❌ İptal edildi.")
         return
     
-    user_data = {'text': message.text}
-    
+    # Buton ekleme seçeneği
     markup = types.InlineKeyboardMarkup(row_width=2)
-    btn1 = types.InlineKeyboardButton("✅ Evet", callback_data='announce_with_photo_yes')
-    btn2 = types.InlineKeyboardButton("❌ Hayır", callback_data='announce_with_photo_no')
+    btn1 = types.InlineKeyboardButton("✅ Evet", callback_data='add_buttons_yes')
+    btn2 = types.InlineKeyboardButton("❌ Hayır", callback_data='add_buttons_no')
+    markup.add(btn1, btn2)
+    
+    active_announcement = {
+        'text': message.text,
+        'photo_id': None,
+        'buttons': []
+    }
+    
+    bot.send_message(
+        message.chat.id,
+        "🔘 **Buton eklemek istiyor musunuz?**\n\n"
+        "Butonlar kullanıcıları bir linke yönlendirebilir.",
+        reply_markup=markup
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('add_buttons'))
+def handle_buttons_choice(call):
+    if call.data == 'add_buttons_yes':
+        bot.edit_message_text(
+            "➕ **Buton ekleyin**\n\n"
+            "Format: `Buton Metni - URL`\n\n"
+            "Örnek:\n"
+            "`Web Sitemiz - https://example.com`\n"
+            "`İndir - https://play.google.com`\n\n"
+            "Bitirmek için /done yazın",
+            call.message.chat.id,
+            call.message.message_id
+        )
+        bot.register_next_step_handler(call.message, process_buttons)
+    else:
+        ask_for_photo(call.message)
+
+def process_buttons(message):
+    global active_announcement
+    
+    if message.text == '/done':
+        ask_for_photo(message)
+        return
+    
+    try:
+        if ' - ' in message.text:
+            button_text, button_url = message.text.split(' - ', 1)
+            active_announcement['buttons'].append({
+                'text': button_text.strip(),
+                'url': button_url.strip()
+            })
+            
+            bot.send_message(
+                message.chat.id,
+                f"✅ Buton eklendi: {button_text.strip()}\n"
+                f"Devam etmek için başka buton ekleyin veya /done yazın."
+            )
+            bot.register_next_step_handler(message, process_buttons)
+        else:
+            bot.send_message(
+                message.chat.id,
+                "❌ Hatalı format! Doğru format: `Metin - URL`\nÖrnek: `Google - https://google.com`"
+            )
+            bot.register_next_step_handler(message, process_buttons)
+    except:
+        bot.send_message(message.chat.id, "❌ Bir hata oluştu, tekrar deneyin.")
+        bot.register_next_step_handler(message, process_buttons)
+
+def ask_for_photo(message):
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    btn1 = types.InlineKeyboardButton("✅ Evet", callback_data='add_photo_yes')
+    btn2 = types.InlineKeyboardButton("❌ Hayır", callback_data='add_photo_no')
     markup.add(btn1, btn2)
     
     bot.send_message(
         message.chat.id,
-        "🖼️ **Fotoğraf eklemek istiyor musunuz?**\n\n"
-        "Duyuruya bir görsel eklemek isterseniz 'Evet' seçeneğini seçin.",
+        "🖼️ **Fotoğraf eklemek istiyor musunuz?**",
         reply_markup=markup
     )
-    bot.register_next_step_handler(message, lambda m: setattr(m, 'user_data', user_data))
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('announce_with_photo'))
+@bot.callback_query_handler(func=lambda call: call.data.startswith('add_photo'))
 def handle_photo_choice(call):
-    if call.data == 'announce_with_photo_yes':
+    if call.data == 'add_photo_yes':
         bot.edit_message_text(
             "📸 **Fotoğraf gönderin:**\n\n"
             "Lütfen duyuru için bir fotoğraf gönderin.",
             call.message.chat.id,
             call.message.message_id
         )
-        bot.register_next_step_handler(call.message, get_announcement_photo)
+        bot.register_next_step_handler(call.message, process_photo)
     else:
-        send_preview(call.message, None)
+        show_preview(call.message)
 
-def get_announcement_photo(message):
+def process_photo(message):
+    global active_announcement
+    
     if message.content_type == 'photo':
-        # En yüksek çözünürlüklü fotoğrafı al
         photo_id = message.photo[-1].file_id
-        send_preview(message, photo_id)
+        active_announcement['photo_id'] = photo_id
+        show_preview(message)
     else:
-        bot.send_message(message.chat.id, "❌ Lütfen sadece fotoğraf gönderin.")
-        bot.register_next_step_handler(message, get_announcement_photo)
+        bot.send_message(message.chat.id, "❌ Lütfen fotoğraf gönderin.")
+        bot.register_next_step_handler(message, process_photo)
 
-def send_preview(message, photo_id=None):
-    user_id = message.from_user.id
+def show_preview(message):
+    global active_announcement
     
-    # Butonlar oluştur
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    btn1 = types.InlineKeyboardButton("📤 Gönder", callback_data='send_announcement')
-    btn2 = types.InlineKeyboardButton("✏️ Düzenle", callback_data='edit_announcement')
-    btn3 = types.InlineKeyboardButton("❌ İptal", callback_data='cancel_announcement')
+    if not active_announcement:
+        bot.send_message(message.chat.id, "❌ Duyuru bulunamadı.")
+        return
     
-    # Link butonu örneği
-    btn4 = types.InlineKeyboardButton("🌐 Web Sitemiz", url="https://example.com")
-    markup.add(btn1, btn2, btn3)
-    markup.add(btn4)
+    # Butonları oluştur
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    
+    # Kullanıcı butonlarını ekle
+    for btn in active_announcement['buttons']:
+        markup.add(types.InlineKeyboardButton(btn['text'], url=btn['url']))
+    
+    # Gönder ve İptal butonları
+    markup.row(
+        types.InlineKeyboardButton("🚀 GÖNDER", callback_data='send_now'),
+        types.InlineKeyboardButton("❌ İPTAL", callback_data='cancel_send')
+    )
     
     preview_text = f"""
     📢 **DUYURU ÖNİZLEME**
     
-    {message.text}
+    {active_announcement['text']}
     
-    ───────────────
+    ──────────────
     📊 Gönderilecek: {len(user_db['users'])} kullanıcı
-    ⏰ Zaman: {time.strftime('%d.%m.%Y %H:%M')}
+    ⏰ Zaman: {time.strftime('%H:%M')}
     """
     
-    if photo_id:
+    if active_announcement['photo_id']:
         bot.send_photo(
-            user_id,
-            photo_id,
+            message.chat.id,
+            active_announcement['photo_id'],
             caption=preview_text,
             reply_markup=markup,
             parse_mode='Markdown'
         )
     else:
         bot.send_message(
-            user_id,
+            message.chat.id,
             preview_text,
             reply_markup=markup,
             parse_mode='Markdown'
         )
-    
-    # Veriyi sakla
-    user_db['temp_announcement'] = {
-        'text': message.text,
-        'photo_id': photo_id,
-        'buttons': [{'text': '🌐 Web Sitemiz', 'url': 'https://example.com'}]
-    }
 
-@bot.callback_query_handler(func=lambda call: call.data == 'send_announcement')
-def send_announcement_to_all(call):
-    announcement = user_db.get('temp_announcement')
-    if not announcement:
-        bot.answer_callback_query(call.id, "❌ Duyuru bulunamadı!")
+@bot.callback_query_handler(func=lambda call: call.data in ['send_now', 'cancel_send'])
+def handle_send_decision(call):
+    if call.data == 'cancel_send':
+        global active_announcement
+        active_announcement = None
+        
+        bot.edit_message_text(
+            "❌ Duyuru iptal edildi.",
+            call.message.chat.id,
+            call.message.message_id
+        )
         return
     
+    # Gönderme işlemi
     bot.edit_message_text(
-        "⏳ **Duyuru gönderiliyor...**\n\n"
-        f"Hedef: {len(user_db['users'])} kullanıcı",
+        f"⏳ **Gönderiliyor...**\n0/{len(user_db['users'])}",
         call.message.chat.id,
         call.message.message_id
     )
     
     success = 0
     failed = 0
-    total = len(user_db['users'])
-    
-    # İlerleme mesajı
-    progress_msg = bot.send_message(
-        call.message.chat.id,
-        f"📤 Gönderim başladı...\n0/{total}"
-    )
     
     # Butonları oluştur
-    markup = types.InlineKeyboardMarkup()
-    for btn in announcement['buttons']:
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    for btn in active_announcement['buttons']:
         markup.add(types.InlineKeyboardButton(btn['text'], url=btn['url']))
     
     # Her kullanıcıya gönder
-    for i, user_id in enumerate(user_db['users']):
+    for i, user_id in enumerate(list(user_db['users']), 1):
         try:
-            if announcement['photo_id']:
+            if active_announcement['photo_id']:
                 bot.send_photo(
                     user_id,
-                    announcement['photo_id'],
-                    caption=announcement['text'],
+                    active_announcement['photo_id'],
+                    caption=active_announcement['text'],
                     reply_markup=markup,
                     parse_mode='Markdown'
                 )
             else:
                 bot.send_message(
                     user_id,
-                    announcement['text'],
+                    active_announcement['text'],
                     reply_markup=markup,
                     parse_mode='Markdown'
                 )
             success += 1
-        except Exception as e:
+        except:
             failed += 1
         
-        # Her 10 gönderimde bir güncelle
-        if i % 10 == 0:
+        # Her 5 gönderimde bir güncelle
+        if i % 5 == 0 or i == len(user_db['users']):
             bot.edit_message_text(
-                f"📤 Gönderiliyor...\n{success+failed}/{total}",
+                f"⏳ **Gönderiliyor...**\n{i}/{len(user_db['users'])}",
                 call.message.chat.id,
-                progress_msg.message_id
+                call.message.message_id
             )
     
-    # İstatistikleri güncelle
-    user_db['stats']['last_announcement'] = time.strftime('%d.%m.%Y %H:%M')
+    # Sonuç mesajı
+    result_text = f"""
+    ✅ **DUYURU GÖNDERİLDİ!**
     
-    # Sonuç raporu
-    report = f"""
-    ✅ **DUYURU TAMAMLANDI!**
-    
-    📊 İstatistikler:
+    📊 Sonuçlar:
     • ✓ Başarılı: {success}
     • ✗ Başarısız: {failed}
-    • 📈 Toplam: {total}
-    • ⏰ Zaman: {time.strftime('%d.%m.%Y %H:%M')}
+    • 📈 Toplam: {len(user_db['users'])}
     
-    🎯 Başarı Oranı: %{((success/total)*100):.1f}
+    🎯 Başarı Oranı: %{(success/len(user_db['users'])*100):.1f}
+    ⏰ Saat: {time.strftime('%H:%M:%S')}
     """
     
-    bot.delete_message(call.message.chat.id, progress_msg.message_id)
-    bot.send_message(call.message.chat.id, report, parse_mode='Markdown')
+    bot.edit_message_text(
+        result_text,
+        call.message.chat.id,
+        call.message.message_id,
+        parse_mode='Markdown'
+    )
     
-    # Geçici veriyi temizle
-    if 'temp_announcement' in user_db:
-        del user_db['temp_announcement']
+    # Temizle
+    active_announcement = None
 
-@bot.message_handler(func=lambda message: message.text == '📊 İstatistikler' and str(message.from_user.id) == ADMIN_ID)
+@bot.message_handler(func=lambda message: message.text == '📊 İstatistik' and str(message.from_user.id) == ADMIN_ID)
 def show_stats(message):
     stats_text = f"""
-    📈 **BOT İSTATİSTİKLERİ**
+    📈 **İSTATİSTİKLER**
     
-    👥 Kullanıcı Sayısı: {len(user_db['users'])}
-    💬 Toplam Mesaj: {user_db['stats']['total_messages']}
-    📢 Son Duyuru: {user_db['stats']['last_announcement'] or 'Henüz yok'}
-    
-    ⏰ Sistem Saati: {time.strftime('%d.%m.%Y %H:%M:%S')}
+    👥 Toplam Kullanıcı: {len(user_db['users'])}
+    ⏰ Sistem Saati: {time.strftime('%H:%M:%S')}
+    📅 Tarih: {time.strftime('%d.%m.%Y')}
     """
     
     bot.send_message(message.chat.id, stats_text, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda message: message.text == '❌ İptal' and str(message.from_user.id) == ADMIN_ID)
-def cancel_operation(message):
+def cancel_all(message):
+    global active_announcement
+    active_announcement = None
+    
     bot.send_message(
         message.chat.id,
-        "✅ İşlem iptal edildi. Ana menüye dönüldü.",
+        "✅ Tüm işlemler iptal edildi.",
         reply_markup=types.ReplyKeyboardRemove()
     )
 
-# Diğer mesajları kaydet
 @bot.message_handler(func=lambda message: True)
-def handle_all_messages(message):
+def handle_other_messages(message):
     user_db['users'].add(message.from_user.id)
-    user_db['stats']['total_messages'] += 1
     
     if str(message.from_user.id) != ADMIN_ID:
         bot.reply_to(
             message,
-            "🤖 Bu bot sadece duyuru almak içindir. "
-            "Yönetici size duyuruları gönderecektir."
+            "🤖 Bu bot sadece duyuru almak içindir.\n"
+            "Duyurular yönetici tarafından gönderilecektir."
         )
 
 if __name__ == "__main__":
-    print("=" * 50)
-    print("🤖 PROFESYONEL DUYURU BOTU")
-    print(f"👥 Kayıtlı Kullanıcı: {len(user_db['users'])}")
+    print("=" * 40)
+    print("🤖 DUYURU BOTU BAŞLATILDI")
     print(f"🔑 Admin ID: {ADMIN_ID}")
-    print("=" * 50)
+    print(f"👥 Kullanıcı: {len(user_db['users'])}")
+    print("=" * 40)
     
-    try:
-        bot.infinity_polling(timeout=60, long_polling_timeout=30)
-    except Exception as e:
-        print(f"❌ Hata: {e}")
-        print("♻️ Bot yeniden başlatılıyor...")
-        time.sleep(5)
+    bot.infinity_polling()
