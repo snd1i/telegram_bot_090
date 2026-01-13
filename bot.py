@@ -1,43 +1,48 @@
-import telebot
 import os
-import time
+import telebot
+import logging
 
-# Bot tokenini environment variable'dan al
+# Log ayarları
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# Bot tokeni
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 
 if not BOT_TOKEN:
-    print("HATA: BOT_TOKEN bulunamadı!")
-    print("Lütfen Railway'de BOT_TOKEN environment variable ekleyin.")
+    logger.error("BOT_TOKEN environment variable bulunamadı!")
+    logger.info("Railway'de Settings > Variables'a BOT_TOKEN ekleyin")
     exit(1)
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-@bot.message_handler(commands=['start'])
+@bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-    user = message.from_user
-    welcome_text = f"""
-    Merhaba {user.first_name}! 👋
-
-    Bot başarıyla çalışıyor! 🎉
-    
-    ID: {user.id}
-    Kullanıcı adı: @{user.username if user.username else 'yok'}
-    """
-    bot.reply_to(message, welcome_text)
+    try:
+        bot.reply_to(message, "🤖 Merhaba! Bot çalışıyor!\n\nKomutlar:\n/start - Botu başlat\n/help - Yardım")
+        logger.info(f"/start komutu: {message.from_user.id}")
+    except Exception as e:
+        logger.error(f"Hata: {e}")
 
 @bot.message_handler(func=lambda message: True)
 def echo_all(message):
-    bot.reply_to(message, f"Şu an sadece /start komutu çalışıyor. Mesajınız: {message.text}")
+    bot.reply_to(message, f"📝 Mesajınız: {message.text}\n\nSadece /start komutu aktif.")
 
-if __name__ == "__main__":
-    print("🤖 Telegram Bot Başlatılıyor...")
-    print(f"Bot Token: {BOT_TOKEN[:10]}...")  # Güvenlik için sadece ilk 10 karakter
-    print("Bot aktif! /start komutunu bekliyor...")
+if __name__ == '__main__':
+    logger.info("Bot başlatılıyor...")
+    logger.info(f"Python versiyonu: {os.sys.version}")
     
-    while True:
-        try:
-            bot.polling(none_stop=True, interval=0, timeout=20)
-        except Exception as e:
-            print(f"Hata oluştu: {e}")
-            print("5 saniye sonra tekrar deneniyor...")
-            time.sleep(5)
+    try:
+        bot_info = bot.get_me()
+        logger.info(f"Bot başlatıldı: @{bot_info.username}")
+        print(f"✅ Bot çalışıyor: @{bot_info.username}")
+        print("📱 Telegram'da /start yazarak test edebilirsiniz")
+        
+        bot.infinity_polling(timeout=10, long_polling_timeout=5)
+        
+    except Exception as e:
+        logger.error(f"Bot başlatılamadı: {e}")
+        print(f"❌ Hata: {e}")
