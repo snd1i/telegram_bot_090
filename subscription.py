@@ -241,21 +241,32 @@ def handle_subscription_check(call):
         # Aktif kullanıcılara ekle
         active_users.add(user_id)
         
-        # Başarı mesajı göster (1 saniye)
+        # BUTONLU abonelik başarı mesajını göster
+        markup = types.InlineKeyboardMarkup()
+        prompts_button = types.InlineKeyboardButton(
+            lang_data.get('prompts_button', '🎉 prompts 🎉'),
+            url='https://t.me/PrompttAI_bot/Prompts'
+        )
+        markup.add(prompts_button)
+        
+        # Özel abonelik başarı mesajını gönder
         success_msg = bot.send_message(
             chat_id,
-            f"{text['success']}",
+            f"✅ {text['success']}\n\n"
+            f"{lang_data.get('subscription_success_message', 'subscribed to channel 🎉')}",
+            reply_markup=markup,
             parse_mode='Markdown'
         )
         
-        # 1 saniye bekle ve HOŞGELDİN MESAJINI GÖSTER
-        time.sleep(1)
+        # 3 saniye bekle
+        time.sleep(3)
+        
+        # Sonra HOŞGELDİN MESAJINI GÖSTER
         try:
             bot.delete_message(chat_id, success_msg.message_id)
         except:
             pass
         
-        # HEMEN hoşgeldin mesajını göster
         from main import show_welcome_message
         show_welcome_message(call.message, lang_code)
         
