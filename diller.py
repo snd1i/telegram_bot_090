@@ -30,7 +30,10 @@ DILLER = {
         'button_support': 'هاریکاری 🤝',
         'channel_url': 'https://t.me/sndiyi',
         'prompts_url': 'https://t.me/PrompttAI_bot/Prompts',
-        'support_url': 'https://t.me/k4miran_sndi'
+        'support_url': 'https://t.me/k4miran_sndi',
+        # Abonelik başarı mesajı için
+        'subscription_success_message': 'کەنال هاتە جوین کرن 🎉\nبو بدەستفە ینانا کودێن وێنا دکما ل خارێ کلیک بکە 👇',
+        'prompts_button': '🎉 کودێن وینا 🎉'
     },
     'ku_sorani': {
         'code': 'ku_sorani',
@@ -62,7 +65,10 @@ DILLER = {
         'button_support': 'یارمەتی 🤝',
         'channel_url': 'https://t.me/sndiyi',
         'prompts_url': 'https://t.me/PrompttAI_bot/Prompts',
-        'support_url': 'https://t.me/k4miran_sndi'
+        'support_url': 'https://t.me/k4miran_sndi',
+        # Abonelik başarı mesajı için
+        'subscription_success_message': 'بەشداربوون بە کەناڵ 🎉\nکرتە لە دوگمەی خوارەوە بکە بۆ وەرگرتنی پرۆمپتەکان 👇',
+        'prompts_button': '🎉 پرۆمپتەکان 🎉'
     },
     'tr': {
         'code': 'tr',
@@ -94,7 +100,10 @@ DILLER = {
         'button_support': 'Destek 🤝',
         'channel_url': 'https://t.me/sndiyi',
         'prompts_url': 'https://t.me/PrompttAI_bot/Prompts',
-        'support_url': 'https://t.me/k4miran_sndi'
+        'support_url': 'https://t.me/k4miran_sndi',
+        # Abonelik başarı mesajı için
+        'subscription_success_message': 'kanala abone olundu 🎉\naşağıdaki doğumeye tıklayarak promptları elde edin 👇',
+        'prompts_button': '🎉 prompts 🎉'
     },
     'en': {
         'code': 'en',
@@ -126,7 +135,10 @@ DILLER = {
         'button_support': 'Support 🤝',
         'channel_url': 'https://t.me/sndiyi',
         'prompts_url': 'https://t.me/PrompttAI_bot/Prompts',
-        'support_url': 'https://t.me/k4miran_sndi'
+        'support_url': 'https://t.me/k4miran_sndi',
+        # Abonelik başarı mesajı için
+        'subscription_success_message': 'subscribed to channel 🎉\nclick the button below to get prompts 👇',
+        'prompts_button': '🎉 prompts 🎉'
     },
     'ar': {
         'code': 'ar',
@@ -158,7 +170,10 @@ DILLER = {
         'button_support': 'الدعم 🤝',
         'channel_url': 'https://t.me/sndiyi',
         'prompts_url': 'https://t.me/PrompttAI_bot/Prompts',
-        'support_url': 'https://t.me/k4miran_sndi'
+        'support_url': 'https://t.me/k4miran_sndi',
+        # Abonelik başarı mesajı için
+        'subscription_success_message': 'تم الاشتراك في القناة 🎉\nانقر على الزر أدناه للحصول على البرومبتات 👇',
+        'prompts_button': '🎉 البرومبتات 🎉'
     }
 }
 
