@@ -249,8 +249,8 @@ def handle_subscription_check(call):
         )
         markup.add(prompts_button)
         
-        # Özel abonelik başarı mesajını gönder
-        success_msg = bot.send_message(
+        # Özel abonelik başarı mesajını gönder (KALICI - SİLİNMEYECEK)
+        bot.send_message(
             chat_id,
             f"✅ {text['success']}\n\n"
             f"{lang_data.get('subscription_success_message', 'subscribed to channel 🎉')}",
@@ -258,15 +258,7 @@ def handle_subscription_check(call):
             parse_mode='Markdown'
         )
         
-        # 3 saniye bekle
-        time.sleep(3)
-        
-        # Sonra HOŞGELDİN MESAJINI GÖSTER
-        try:
-            bot.delete_message(chat_id, success_msg.message_id)
-        except:
-            pass
-        
+        # HEMEN hoşgeldin mesajını göster
         from main import show_welcome_message
         show_welcome_message(call.message, lang_code)
         
