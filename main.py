@@ -485,32 +485,43 @@ def send_command(message):
 
 @bot.message_handler(commands=['stats'])
 def stats_command(message):
-    if str(message.from_user.id) == ADMIN_ID:
-        # Storage'dan gerçek verileri al
-        storage_stats = storage.storage.get_stats()
-        total_users = storage_stats['total_users']
-        memory_users = len(users)
-        metadata = storage_stats['metadata']
-        
-        # Tarih formatı
-        from datetime import datetime
-        created_at = datetime.fromtimestamp(metadata.get('created_at', time.time())).strftime('%d.%m.%Y %H:%M')
-        
+    user_id = message.from_user.id
+    
+    # Debug için log
+    print(f"📊 /stats komutu çağrıldı: user_id={user_id}, admin_id={ADMIN_ID}, admin mi? {str(user_id) == ADMIN_ID}")
+    
+    # Admin kontrolü
+    if str(user_id) != ADMIN_ID:
+        lang_data = diller.get_language_data(user_id)
         bot.reply_to(
-            message,
-            f"📊 **Admin İstatistikleri**\n\n"
-            f"• 👥 Toplam Kullanıcı (DB): {total_users}\n"
-            f"• 🧠 Bellekteki Kullanıcı: {memory_users}\n"
-            f"• 📈 Veritabanı Tutarlılık: {'✅' if total_users == memory_users else '⚠️'}\n"
-            f"• 📅 Oluşturulma: {created_at}\n"
-            f"• 🔄 Toplam Güncelleme: {metadata.get('total_updates', 0)}\n"
-            f"• 🤖 Bot Durumu: Aktif\n"
-            f"• 🔑 Admin ID: {ADMIN_ID}\n"
-            f"• 📢 Aktif Kanal: {subscription.REQUIRED_CHANNEL['name']}\n"
-            f"• 🔗 Kanal URL: {subscription.REQUIRED_CHANNEL['url']}\n"
-            f"• 💾 Veri Dosyası: {storage.storage.data_file}",
-            parse_mode='Markdown'
+            message, 
+            f"⛔ {lang_data.get('help_command', 'Yardım için')} /help"
         )
+        return
+    
+    try:
+        # Storage'dan verileri al
+        total_users = storage.storage.get_total_users()
+        memory_users = len(users)
+        
+        # Basit ve güvenilir istatistik mesajı
+        stats_text = (
+            f"📊 **Bot İstatistikleri**\n\n"
+            f"• 👥 Toplam Kullanıcı: **{total_users}**\n"
+            f"• 🧠 Bellekteki Kullanıcı: {memory_users}\n"
+            f"• 🤖 Bot Durumu: **Aktif** ✅\n"
+            f"• 🔑 Admin ID: `{ADMIN_ID}`\n"
+            f"• 📢 Aktif Kanal: {subscription.REQUIRED_CHANNEL['name']}\n"
+            f"• 🔗 Kanal Linki: {subscription.REQUIRED_CHANNEL['url']}\n\n"
+            f"🔄 Son güncelleme: {time.strftime('%d.%m.%Y %H:%M:%S')}"
+        )
+        
+        bot.reply_to(message, stats_text, parse_mode='Markdown')
+        print(f"✅ /stats gönderildi: {total_users} kullanıcı")
+        
+    except Exception as e:
+        print(f"❌ /stats hatası: {e}")
+        bot.reply_to(message, f"❌ İstatistikler alınamadı: {str(e)}")
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_all_callbacks(call):
@@ -572,7 +583,7 @@ if __name__ == "__main__":
     print("✅ GERÇEK ZAMANLI Abonelik Kontrolü")
     print("✅ Kanaldan ayrılma tespiti")
     print("✅ Kalıcı Kullanıcı Veritabanı")
-    print("✅ Kanal yönetimi (/channel komutu)")
+    print("✅ /stats komutu aktif")
     print("=" * 60)
     
     bot.infinity_polling()
