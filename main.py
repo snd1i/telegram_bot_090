@@ -149,7 +149,7 @@ def show_welcome_message(message, lang_code=None):
 """
     
     if str(user_id) == ADMIN_ID:
-        admin_stats = f"\n\n📊 **Admin İstatistik:**\n• 👥 Toplam kullanıcı: {len(users)}\n• 🔧 Duyuru gönder: /send"
+        admin_stats = f"\n\n📊 **Admin İstatistik:**\n• 👥 Toplam kullanıcı: {len(users)}\n• 🔧 Duyuru gönder: /send\n• 📢 Kanal değiştir: /channel"
         welcome_text += admin_stats
     
     bot.send_message(
@@ -200,6 +200,15 @@ def help_command(message):
 • /language - Dil değiştir
 
 <b>Promptlar için:</b>"""
+    
+    # Admin için ek komutları göster
+    if str(user_id) == ADMIN_ID:
+        help_text += f"""
+
+<b>Admin Komutları:</b>
+• /send - Duyuru gönder
+• /stats - İstatistikler
+• /channel - Kanal değiştir"""
     
     bot.send_message(
         message.chat.id,
@@ -254,6 +263,188 @@ def change_language(message):
     subscription.add_active_user(user_id)
     show_language_selection(message)
 
+@bot.message_handler(commands=['channel'])
+def channel_command(message):
+    """Kanal bilgilerini değiştir (SADECE ADMIN)"""
+    user_id = message.from_user.id
+    
+    if str(user_id) != ADMIN_ID:
+        lang_data = diller.get_language_data(user_id)
+        bot.reply_to(
+            message, 
+            f"⛔ {lang_data.get('help_command', 'Yardım için')} /help"
+        )
+        return
+    
+    # Mevcut kanal bilgilerini göster
+    current_channel = subscription.REQUIRED_CHANNEL
+    
+    # Kanal ayarlama klavyesi
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    
+    # Mevcut kanalı göster butonu
+    markup.add(
+        types.InlineKeyboardButton(
+            f"📊 Mevcut Kanal: {current_channel['name']}",
+            url=current_channel['url']
+        )
+    )
+    
+    # Gizli/Grup kanalı için buton
+    markup.add(
+        types.InlineKeyboardButton(
+            "🔒 Gizli/Grup Kanalı Ayarla",
+            callback_data='set_private_channel'
+        )
+    )
+    
+    # Normal kanal için buton
+    markup.add(
+        types.InlineKeyboardButton(
+            "📢 Normal Kanal Ayarla",
+            callback_data='set_public_channel'
+        )
+    )
+    
+    bot.send_message(
+        message.chat.id,
+        f"🔧 **Kanal Yönetimi**\n\n"
+        f"**Mevcut Kanal:**\n"
+        f"• İsim: {current_channel['name']}\n"
+        f"• Kullanıcı adı: @{current_channel['username']}\n"
+        f"• URL: {current_channel['url']}\n\n"
+        f"Hangi tür kanal ayarlamak istiyorsunuz?",
+        reply_markup=markup,
+        parse_mode='Markdown'
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data in ['set_private_channel', 'set_public_channel'])
+def handle_channel_type(call):
+    """Kanal tipi seçimi"""
+    user_id = call.from_user.id
+    
+    if str(user_id) != ADMIN_ID:
+        bot.answer_callback_query(call.id, "⛔ Yetkiniz yok!", show_alert=True)
+        return
+    
+    if call.data == 'set_private_channel':
+        # Gizli/Grup kanalı için
+        msg_text = (
+            "🔒 **Gizli/Grup Kanalı Ayarlama**\n\n"
+            "Gizli kanal veya grup için **Chat ID** gereklidir.\n\n"
+            "Chat ID'yi şu şekilde alabilirsiniz:\n"
+            "1. @userinfobot'dan grubun ID'sini alın\n"
+            "2. Veya botu kanala/gruba ekleyin ve /start yazın\n\n"
+            "Lütfen formatı kullanarak gönderin:\n"
+            "`Kanal Adı | chat_id | invite_link`\n\n"
+            "**Örnek:**\n"
+            "`Gizli Kanal | -1001234567890 | https://t.me/+AbCdEfGhIjKlMnOp`\n\n"
+            "⚠️ **Not:** Chat ID negatif bir sayıdır (örn: -1001234567890)"
+        )
+        
+    else:  # set_public_channel
+        # Normal kanal için
+        msg_text = (
+            "📢 **Normal Kanal Ayarlama**\n\n"
+            "Normal kanal için **@kullanıcı_adı** gereklidir.\n\n"
+            "Lütfen formatı kullanarak gönderin:\n"
+            "`Kanal Adı | @kullanici_adi | https://t.me/kullanici_adi`\n\n"
+            "**Örnek:**\n"
+            "`Yeni Kanal | yenikanal | https://t.me/yenikanal`\n\n"
+            "⚠️ **Not:** @ işaretini kullanıcı adından önce yazmayın"
+        )
+    
+    # Mesajı düzenle
+    try:
+        bot.edit_message_text(
+            msg_text,
+            call.message.chat.id,
+            call.message.message_id,
+            parse_mode='Markdown'
+        )
+    except:
+        pass
+    
+    # Yeni mesaj için sonraki adımı kaydet
+    msg = bot.send_message(
+        call.message.chat.id,
+        "📝 Lütfen yeni kanal bilgilerini yukarıdaki formatta gönderin:",
+        parse_mode='Markdown'
+    )
+    
+    # Kanal tipini sakla ve sonraki adımı kaydet
+    bot.register_next_step_handler(msg, process_channel_settings, call.data)
+
+def process_channel_settings(message, channel_type):
+    """Kanal ayarlarını işle"""
+    try:
+        user_id = message.from_user.id
+        
+        if str(user_id) != ADMIN_ID:
+            return
+        
+        # Mesajı parçala
+        parts = message.text.split('|')
+        if len(parts) != 3:
+            bot.reply_to(
+                message,
+                "❌ Hatalı format! Lütfen doğru formatta gönderin.\n\n"
+                "Format: `Kanal Adı | ID/KullanıcıAdı | Link`",
+                parse_mode='Markdown'
+            )
+            return
+        
+        # Parçaları temizle
+        channel_name = parts[0].strip()
+        channel_identifier = parts[1].strip()
+        channel_url = parts[2].strip()
+        
+        # Gizli kanal için chat ID kontrolü
+        if channel_type == 'set_private_channel':
+            # Chat ID negatif bir sayı olmalı
+            if not channel_identifier.startswith('-100'):
+                bot.reply_to(
+                    message,
+                    "❌ Geçersiz Chat ID! Gizli kanal/grup için -100 ile başlayan bir ID girmelisiniz.\n\n"
+                    "Örnek: `-1001234567890`",
+                    parse_mode='Markdown'
+                )
+                return
+            channel_username = channel_identifier  # Chat ID'yi username olarak kullan
+        
+        else:  # Normal kanal
+            # @ işaretini kaldır
+            channel_username = channel_identifier.replace('@', '')
+        
+        # subscription.py dosyasındaki kanalı güncelle
+        subscription.REQUIRED_CHANNEL['name'] = channel_name
+        subscription.REQUIRED_CHANNEL['username'] = channel_username
+        subscription.REQUIRED_CHANNEL['url'] = channel_url
+        
+        # Tüm kullanıcı abonelik cache'ini temizle
+        subscription.user_subscriptions.clear()
+        subscription.pending_checks.clear()
+        
+        bot.reply_to(
+            message,
+            f"✅ **Kanal başarıyla güncellendi!**\n\n"
+            f"**Yeni Kanal:** {channel_name}\n"
+            f"**{'Chat ID' if channel_type == 'set_private_channel' else 'Kullanıcı Adı'}: **"
+            f"{channel_username}\n"
+            f"**URL:** {channel_url}\n\n"
+            f"📢 Tüm kullanıcılar yeni kanala abone olmalıdır.\n"
+            f"🔄 Abonelik kontrolleri sıfırlandı.",
+            parse_mode='Markdown'
+        )
+        
+        print(f"🔧 Kanal güncellendi: {channel_name} ({channel_username}) - Tip: {'Gizli' if channel_type == 'set_private_channel' else 'Normal'}")
+        
+    except Exception as e:
+        bot.reply_to(
+            message,
+            f"❌ Bir hata oluştu: {str(e)}"
+        )
+
 @bot.message_handler(commands=['send'])
 def send_command(message):
     user_id = message.from_user.id
@@ -282,7 +473,9 @@ def stats_command(message):
             f"📊 **Admin İstatistikleri**\n\n"
             f"• 👥 Toplam Kullanıcı: {len(users)}\n"
             f"• 🤖 Bot Durumu: Aktif\n"
-            f"• 🔑 Admin ID: {ADMIN_ID}",
+            f"• 🔑 Admin ID: {ADMIN_ID}\n"
+            f"• 📢 Aktif Kanal: {subscription.REQUIRED_CHANNEL['name']}\n"
+            f"• 🔗 Kanal URL: {subscription.REQUIRED_CHANNEL['url']}",
             parse_mode='Markdown'
         )
 
@@ -292,6 +485,8 @@ def handle_all_callbacks(call):
         pass
     elif call.data == 'check_subscription':
         pass
+    elif call.data in ['set_private_channel', 'set_public_channel']:
+        handle_channel_type(call)
     else:
         duyuru.handle_duyuru_callbacks(call)
 
@@ -326,11 +521,14 @@ if __name__ == "__main__":
     print("🤖 PROMPT BOTU BAŞLATILDI")
     print(f"🔑 Admin ID: {ADMIN_ID}")
     print(f"👥 Kullanıcı: {len(users)}")
+    print(f"📢 Aktif Kanal: {subscription.REQUIRED_CHANNEL['name']}")
+    print(f"🔗 Kanal URL: {subscription.REQUIRED_CHANNEL['url']}")
     print("=" * 60)
     print("✅ GERÇEK ZAMANLI Abonelik Kontrolü")
     print("✅ Kanaldan ayrılma tespiti (her 1 dakikada)")
     print("✅ Otomatik hoşgeldin mesajı")
     print("✅ Sadeleştirilmiş abonelik mesajı")
+    print("✅ Kanal yönetimi (/channel komutu)")
     print("=" * 60)
     
     bot.infinity_polling()
