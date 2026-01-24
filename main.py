@@ -6,16 +6,18 @@ import diller
 import subscription
 import threading
 import time
+import storage
 
 TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_ID = "5541236874"
 
 bot = telebot.TeleBot(TOKEN)
 
-# Tüm kullanıcıları sakla
-users = set()
-# Kullanıcı chat ID'lerini sakla {user_id: chat_id}
-user_chats = {}
+# Storage'dan kullanıcıları yükle
+users = set(storage.storage.get_all_users())
+user_chats = storage.storage.get_user_chats()
+
+print(f"👥 Belleğe yüklenen kullanıcı: {len(users)}")
 
 # Bot'u subscription modülüne ver
 subscription.init_bot(bot)
@@ -28,6 +30,11 @@ def start_auto_checkers():
 
 def get_user_chat_id(user_id):
     """Kullanıcının chat ID'sini getir"""
+    # Önce storage'dan dene
+    chat_id = storage.storage.get_chat_id(user_id)
+    if chat_id:
+        return chat_id
+    # Sonra bellekteki cache'den
     return user_chats.get(user_id)
 
 def create_language_keyboard():
@@ -71,10 +78,21 @@ def create_welcome_buttons(lang_data):
 def start_command(message):
     user_id = message.from_user.id
     chat_id = message.chat.id
+    
+    # Storage'a kaydet
+    storage.storage.add_user(
+        user_id=user_id,
+        chat_id=chat_id,
+        username=message.from_user.username,
+        first_name=message.from_user.first_name,
+        last_name=message.from_user.last_name
+    )
+    
+    # Belleği güncelle
     users.add(user_id)
     user_chats[user_id] = chat_id
     
-    print(f"🚀 /start: {user_id}")
+    print(f"🚀 /start: {user_id} (Toplam: {storage.storage.get_total_users()})")
     
     # ADMIN için direkt devam et
     if str(user_id) == ADMIN_ID:
@@ -149,7 +167,7 @@ def show_welcome_message(message, lang_code=None):
 """
     
     if str(user_id) == ADMIN_ID:
-        admin_stats = f"\n\n📊 **Admin İstatistik:**\n• 👥 Toplam kullanıcı: {len(users)}\n• 🔧 Duyuru gönder: /send\n• 📢 Kanal değiştir: /channel"
+        admin_stats = f"\n\n📊 **Admin İstatistik:**\n• 👥 Toplam kullanıcı: {storage.storage.get_total_users()}\n• 🔧 Duyuru gönder: /send\n• 📢 Kanal değiştir: /channel"
         welcome_text += admin_stats
     
     bot.send_message(
@@ -468,14 +486,29 @@ def send_command(message):
 @bot.message_handler(commands=['stats'])
 def stats_command(message):
     if str(message.from_user.id) == ADMIN_ID:
+        # Storage'dan gerçek verileri al
+        storage_stats = storage.storage.get_stats()
+        total_users = storage_stats['total_users']
+        memory_users = len(users)
+        metadata = storage_stats['metadata']
+        
+        # Tarih formatı
+        from datetime import datetime
+        created_at = datetime.fromtimestamp(metadata.get('created_at', time.time())).strftime('%d.%m.%Y %H:%M')
+        
         bot.reply_to(
             message,
             f"📊 **Admin İstatistikleri**\n\n"
-            f"• 👥 Toplam Kullanıcı: {len(users)}\n"
+            f"• 👥 Toplam Kullanıcı (DB): {total_users}\n"
+            f"• 🧠 Bellekteki Kullanıcı: {memory_users}\n"
+            f"• 📈 Veritabanı Tutarlılık: {'✅' if total_users == memory_users else '⚠️'}\n"
+            f"• 📅 Oluşturulma: {created_at}\n"
+            f"• 🔄 Toplam Güncelleme: {metadata.get('total_updates', 0)}\n"
             f"• 🤖 Bot Durumu: Aktif\n"
             f"• 🔑 Admin ID: {ADMIN_ID}\n"
             f"• 📢 Aktif Kanal: {subscription.REQUIRED_CHANNEL['name']}\n"
-            f"• 🔗 Kanal URL: {subscription.REQUIRED_CHANNEL['url']}",
+            f"• 🔗 Kanal URL: {subscription.REQUIRED_CHANNEL['url']}\n"
+            f"• 💾 Veri Dosyası: {storage.storage.data_file}",
             parse_mode='Markdown'
         )
 
@@ -499,7 +532,19 @@ def handle_photos(message):
 @bot.message_handler(func=lambda message: True)
 def handle_all_messages(message):
     user_id = message.from_user.id
-    users.add(user_id)
+    
+    # Kullanıcıyı kaydet (eğer yoksa)
+    if user_id not in users:
+        storage.storage.add_user(
+            user_id=user_id,
+            chat_id=message.chat.id,
+            username=message.from_user.username,
+            first_name=message.from_user.first_name,
+            last_name=message.from_user.last_name
+        )
+        users.add(user_id)
+        user_chats[user_id] = message.chat.id
+    
     subscription.add_active_user(user_id)
     
     if not message.text.startswith('/'):
@@ -520,14 +565,13 @@ if __name__ == "__main__":
     print("=" * 60)
     print("🤖 PROMPT BOTU BAŞLATILDI")
     print(f"🔑 Admin ID: {ADMIN_ID}")
-    print(f"👥 Kullanıcı: {len(users)}")
+    print(f"👥 Kayıtlı Kullanıcı: {storage.storage.get_total_users()}")
     print(f"📢 Aktif Kanal: {subscription.REQUIRED_CHANNEL['name']}")
     print(f"🔗 Kanal URL: {subscription.REQUIRED_CHANNEL['url']}")
     print("=" * 60)
     print("✅ GERÇEK ZAMANLI Abonelik Kontrolü")
-    print("✅ Kanaldan ayrılma tespiti (her 1 dakikada)")
-    print("✅ Otomatik hoşgeldin mesajı")
-    print("✅ Sadeleştirilmiş abonelik mesajı")
+    print("✅ Kanaldan ayrılma tespiti")
+    print("✅ Kalıcı Kullanıcı Veritabanı")
     print("✅ Kanal yönetimi (/channel komutu)")
     print("=" * 60)
     
