@@ -186,7 +186,7 @@ def on_subscription_complete(message, user_id):
     user_lang = diller.get_user_language(user_id) or 'tr'
     show_welcome_message(message, user_lang)
 
-# /help komutu (kısa tutalım)
+# /help komutu (TAM DİL UYUMLU)
 @bot.message_handler(commands=['help', 'yardim', 'h'])
 def help_command(message):
     """Kısa yardım komutu"""
@@ -210,23 +210,24 @@ def help_command(message):
         )
     )
     
+    # TAM DİL UYUMLU help metni
     help_text = f"""<b>{lang_data.get('help_greeting', 'Merhaba').format(name=user_name)}</b>
 
-<b>Komutlar:</b>
-• /start - Botu başlat
-• /help - Yardım
-• /language - Dil değiştir
+<b>{lang_data.get('help_commands_title', 'Komutlar')}:</b>
+• {lang_data.get('help_start_cmd', '/start - Botu başlat')}
+• {lang_data.get('help_help_cmd', '/help - Yardım')}
+• /language - {lang_data.get('help_command', 'Yardım için')}
 
-<b>Promptlar için:</b>"""
+<b>{lang_data.get('help_prompts_info', 'Promptlar için')}:</b>"""
     
     # Admin için ek komutları göster
     if str(user_id) == ADMIN_ID:
         help_text += f"""
 
 <b>Admin Komutları:</b>
-• /send - Duyuru gönder
-• /stats - İstatistikler
-• /channel - Kanal değiştir"""
+• /send - {lang_data.get('help_command', 'Yardım için')}
+• /stats - {lang_data.get('help_command', 'Yardım için')}
+• /channel - {lang_data.get('help_command', 'Yardım için')}"""
     
     bot.send_message(
         message.chat.id,
@@ -583,6 +584,7 @@ if __name__ == "__main__":
     print("✅ GERÇEK ZAMANLI Abonelik Kontrolü")
     print("✅ Kanaldan ayrılma tespiti")
     print("✅ Kalıcı Kullanıcı Veritabanı")
+    print("✅ /help komutu dil uyumlu")
     print("✅ /stats komutu aktif")
     print("=" * 60)
     
