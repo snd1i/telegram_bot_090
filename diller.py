@@ -26,14 +26,20 @@ DILLER = {
         'help_command': 'ژبو هاریکاریێ',
         # Butonlar
         'button_channel': 'کەنال 📢',
-        'button_prompts': 'كودێن وێنا 🔥',
+        'button_prompts': '🎨کودێن وینا🎨',  # DEĞİŞTİRİLDİ
         'button_support': 'هاریکاری 🤝',
         'channel_url': 'https://t.me/sndiyi',
         'prompts_url': 'https://t.me/PrompttAI_bot/Prompts',
         'support_url': 'https://t.me/k4miran_sndi',
         # Abonelik başarı mesajı için
         'subscription_success_message': 'کەنال هاتە جوین کرن 🎉\nبو بدەستفە ینانا کودێن وێنا دکما ل خارێ کلیک بکە 👇',
-        'prompts_button': '🎉 کودێن وینا 🎉'
+        'prompts_button': '🎉 کودێن وینا 🎉',
+        # Yeni /help custom metinleri
+        'help_custom_title': '🎨 خێرهاتی {name} بو نافا بوتێ ئاسستانێ کودێن وینا',
+        'help_custom_what': '🤖 کارێ بوتی\nجوانترین کودێن وێنا دێ پێشکێشی تەکم تنێ دێ کوپی کی و بکار ینی',
+        'help_custom_how': '🚀 چاوا بکاێ ینی\n1 او کودێن ئەم بەلاڤ دکن کوپی بکە\n2 بو ژێریا دەسکرد ڤرێکە یاتو بکار دینی وەکی ( gemini )(chatgpt)',
+        'help_custom_commands': '📋 ڤەرمان\n/start - کارکرنا بوتی\n/language - گهورینا زمانی\n/help - ژبو هاریکاریێ',
+        'help_custom_footer': 'بو بکار ینانا بوتی و دەستفە ینانا کودان تبلا خول کودێن وێنا بدە 👇'
     },
     'ku_sorani': {
         'code': 'ku_sorani',
@@ -68,7 +74,13 @@ DILLER = {
         'support_url': 'https://t.me/k4miran_sndi',
         # Abonelik başarı mesajı için
         'subscription_success_message': 'بەشداربوون بە کەناڵ 🎉\nکرتە لە دوگمەی خوارەوە بکە بۆ وەرگرتنی پرۆمپتەکان 👇',
-        'prompts_button': '🎉 پرۆمپتەکان 🎉'
+        'prompts_button': '🎉 پرۆمپتەکان 🎉',
+        # Yeni /help custom metinleri
+        'help_custom_title': '🎨 بەخێربێیت {name}! بۆ ئاسستانی پرۆمپت 👋',
+        'help_custom_what': '🤖 چی دەکەم؟\نباشترین پرۆمپتەکانی وێنەی AI پێشکەشت دەکەم. کۆپی-پێست بکە و بەکاربهێنە!',
+        'help_custom_how': '🚀 چۆن بەکاریبێنم؟\n1. پرۆمپتە هاوبەشکراوەکان کۆپی بکە\n2. لە ئامرازی دڵخوازی خۆتدا تاقی بکەوە (gemini / chatgpt)\n3. ستایلی خۆت دروست بکە!',
+        'help_custom_commands': '📋 فەرمانەکان:\n/start - دەستپێکردنی بۆت\n/language - گۆڕینی زمان\n/help - یارمەتی وەرگرتن',
+        'help_custom_footer': '👇 کرتە لە دوگمەکان بکە بۆ دەستپێکردن!'
     },
     'tr': {
         'code': 'tr',
@@ -103,7 +115,13 @@ DILLER = {
         'support_url': 'https://t.me/k4miran_sndi',
         # Abonelik başarı mesajı için
         'subscription_success_message': 'kanala abone olundu 🎉\naşağıdaki doğumeye tıklayarak promptları elde edin 👇',
-        'prompts_button': '🎉 prompts 🎉'
+        'prompts_button': '🎉 prompts 🎉',
+        # Yeni /help custom metinleri
+        'help_custom_title': '🎨 Merhaba {name}! Prompt Asistanına hoşgeldin 👋',
+        'help_custom_what': '🤖 NE İŞE YARAR?\nEn iyi AI görsel prompt\'larını seninle paylaşıyorum. Kopyala-yapıştır ile kullan!',
+        'help_custom_how': '🚀 NASIL KULLANILIR?\n1. Paylaşılan prompt\'ları kopyala\n2. Favori AI aracında dene ( gemini / chatgpt )\n3. Kendi tarzını oluştur!',
+        'help_custom_commands': '📋 KOMUTLAR:\n/start - Botu başlat\n/language - Dili değiştir\n/help - yardım al',
+        'help_custom_footer': '👇 Hemen başlamak için butonlara tıkla!'
     },
     'en': {
         'code': 'en',
@@ -138,7 +156,13 @@ DILLER = {
         'support_url': 'https://t.me/k4miran_sndi',
         # Abonelik başarı mesajı için
         'subscription_success_message': 'subscribed to channel 🎉\nclick the button below to get prompts 👇',
-        'prompts_button': '🎉 prompts 🎉'
+        'prompts_button': '🎉 prompts 🎉',
+        # Yeni /help custom metinleri
+        'help_custom_title': '🎨 Hello {name}! Welcome to Prompt Assistant 👋',
+        'help_custom_what': '🤖 WHAT DOES IT DO?\nI share the best AI image prompts with you. Use copy-paste!',
+        'help_custom_how': '🚀 HOW TO USE?\n1. Copy shared prompts\n2. Try in your favorite AI tool (gemini / chatgpt)\n3. Create your own style!',
+        'help_custom_commands': '📋 COMMANDS:\n/start - Start the bot\n/language - Change language\n/help - Get help',
+        'help_custom_footer': '👇 Click buttons to get started!'
     },
     'ar': {
         'code': 'ar',
@@ -173,7 +197,13 @@ DILLER = {
         'support_url': 'https://t.me/k4miran_sndi',
         # Abonelik başarı mesajı için
         'subscription_success_message': 'تم الاشتراك في القناة 🎉\nانقر على الزر أدناه للحصول على البرومبتات 👇',
-        'prompts_button': '🎉 البرومبتات 🎉'
+        'prompts_button': '🎉 البرومبتات 🎉',
+        # Yeni /help custom metinleri
+        'help_custom_title': '🎨 أهلاً وسهلاً {name}! مرحباً بك في مساعد البرومبتات 👋',
+        'help_custom_what': '🤖 ماذا أفعل؟\nأشارك معك أفضل برومبتات صور الذكاء الاصطناعي. استخدم النسخ واللصق!',
+        'help_custom_how': '🚀 كيف أستخدمه؟\n1. انسخ البرومبتات المشتركة\n2. جربها في أداتك المفضلة للذكاء الاصطناعي (gemini / chatgpt)\n3. أنشئ أسلوبك الخاص!',
+        'help_custom_commands': '📋 الأوامر:\n/start - بدء البوت\n/language - تغيير اللغة\n/help - الحصول على المساعدة',
+        'help_custom_footer': '👇 انقر على الأزرار للبدء!'
     }
 }
 
