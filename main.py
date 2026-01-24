@@ -186,10 +186,10 @@ def on_subscription_complete(message, user_id):
     user_lang = diller.get_user_language(user_id) or 'tr'
     show_welcome_message(message, user_lang)
 
-# /help komutu (TAM DİL UYUMLU)
+# /help komutu (YENİ METİNLERLE)
 @bot.message_handler(commands=['help', 'yardim', 'h'])
 def help_command(message):
-    """Kısa yardım komutu"""
+    """Yeni yardım komutu"""
     user_id = message.from_user.id
     
     # Aktif kullanıcı olarak işaretle
@@ -198,6 +198,7 @@ def help_command(message):
     lang_data = diller.get_language_data(user_id)
     user_name = diller.format_user_name(message.from_user)
     
+    # Butonları oluştur
     markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(
         types.InlineKeyboardButton(
@@ -210,24 +211,16 @@ def help_command(message):
         )
     )
     
-    # TAM DİL UYUMLU help metni
-    help_text = f"""<b>{lang_data.get('help_greeting', 'Merhaba').format(name=user_name)}</b>
-
-<b>{lang_data.get('help_commands_title', 'Komutlar')}:</b>
-• {lang_data.get('help_start_cmd', '/start - Botu başlat')}
-• {lang_data.get('help_help_cmd', '/help - Yardım')}
-• /language - {lang_data.get('help_command', 'Yardım için')}
-
-<b>{lang_data.get('help_prompts_info', 'Promptlar için')}:</b>"""
+    # YENİ HELP METNİ
+    help_text = f"{lang_data.get('help_custom_title', '🎨 Merhaba {name}! Prompt Asistanına hoşgeldin 👋').format(name=user_name)}\n\n"
+    help_text += f"{lang_data.get('help_custom_what', '🤖 NE İŞE YARAR?\nEn iyi AI görsel prompt\'larını seninle paylaşıyorum. Kopyala-yapıştır ile kullan!')}\n\n"
+    help_text += f"{lang_data.get('help_custom_how', '🚀 NASIL KULLANILIR?\n1. Paylaşılan prompt\'ları kopyala\n2. Favori AI aracında dene ( gemini / chatgpt )\n3. Kendi tarzını oluştur!')}\n\n"
+    help_text += f"{lang_data.get('help_custom_commands', '📋 KOMUTLAR:\n/start - Botu başlat\n/language - Dili değiştir\n/help - yardım al')}\n\n"
+    help_text += f"<b>{lang_data.get('help_custom_footer', '👇 Hemen başlamak için butonlara tıkla!')}</b>"
     
     # Admin için ek komutları göster
     if str(user_id) == ADMIN_ID:
-        help_text += f"""
-
-<b>Admin Komutları:</b>
-• /send - {lang_data.get('help_command', 'Yardım için')}
-• /stats - {lang_data.get('help_command', 'Yardım için')}
-• /channel - {lang_data.get('help_command', 'Yardım için')}"""
+        help_text += f"\n\n<b>Admin Komutları:</b>\n• /send - Duyuru gönder\n• /stats - İstatistikler\n• /channel - Kanal değiştir"
     
     bot.send_message(
         message.chat.id,
@@ -584,7 +577,7 @@ if __name__ == "__main__":
     print("✅ GERÇEK ZAMANLI Abonelik Kontrolü")
     print("✅ Kanaldan ayrılma tespiti")
     print("✅ Kalıcı Kullanıcı Veritabanı")
-    print("✅ /help komutu dil uyumlu")
+    print("✅ YENİ /help metinleri aktif")
     print("✅ /stats komutu aktif")
     print("=" * 60)
     
